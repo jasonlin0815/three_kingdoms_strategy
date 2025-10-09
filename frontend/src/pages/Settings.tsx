@@ -1,10 +1,3 @@
-/**
- * Settings Page
- *
- * 管理帳戶相關設定，包含同盟設定
- * 符合 CLAUDE.md 🟢: Consistent layout with other pages
- */
-
 import { useAlliance } from '@/hooks/use-alliance'
 import { AllianceForm } from '@/components/alliance/AllianceForm'
 import { AllianceCollaboratorManager } from '@/components/alliance/AllianceCollaboratorManager'
@@ -21,7 +14,6 @@ const Settings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight">設定</h2>
         <p className="text-muted-foreground mt-1">
@@ -29,7 +21,6 @@ const Settings: React.FC = () => {
         </p>
       </div>
 
-      {/* Alliance Settings Section */}
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold">同盟設定</h3>
@@ -47,7 +38,6 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      {/* Account Settings Section */}
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold">帳戶設定</h3>

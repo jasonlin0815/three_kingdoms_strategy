@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/AuthContext'
-import { Loader2, Shield, Users, TrendingUp, BarChart3 } from 'lucide-react'
+import { Loader2, TrendingUp, Users, BarChart3 } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 import type { Provider } from '@supabase/supabase-js'
 
 const GOOGLE_ICON = (
@@ -16,25 +17,20 @@ const GOOGLE_ICON = (
 
 const FEATURES = [
   {
-    icon: Users,
-    title: '盟友管理',
-    description: '追蹤同盟成員的各項表現數據'
+    icon: TrendingUp,
+    title: '戰功追蹤',
+    description: '即時追蹤成員戰功表現'
   },
   {
     icon: BarChart3,
     title: '數據分析',
-    description: '自動計算貢獻、戰功、助攻等指標'
+    description: '多維度指標統計分析'
   },
   {
-    icon: TrendingUp,
-    title: '趨勢追蹤',
-    description: '完整的歷史數據與趨勢分析'
+    icon: Users,
+    title: '成員管理',
+    description: '完整生命週期追蹤'
   },
-  {
-    icon: Shield,
-    title: '安全可靠',
-    description: '資料加密保護，僅您可存取'
-  }
 ]
 
 export function Landing() {
@@ -57,61 +53,72 @@ export function Landing() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
 
       {/* Header */}
-      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50 flex-shrink-0">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="h-8 w-8 text-primary" />
-            <h1 className="text-xl font-bold">三國志戰略版</h1>
+          <div className="flex items-center gap-3">
+            <img
+              src="/assets/logo.png"
+              alt="三國志戰略版"
+              className="h-10 w-10 object-contain"
+            />
+            <div className="flex flex-col">
+              <span className="font-bold text-lg leading-tight">三國志戰略版</span>
+              <span className="text-xs text-muted-foreground leading-tight">同盟管理中心</span>
+            </div>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="flex-1 container mx-auto px-4 py-16 md:py-24">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+      {/* Main Content Wrapper */}
+      <div className="flex-1 flex flex-col">
+        {/* Hero Section */}
+        <section className="container mx-auto px-4 py-16 md:py-24">
+          <div className="grid lg:grid-cols-2 gap-16 items-center max-w-7xl mx-auto">
 
           {/* Left: Hero Content */}
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-                盟友表現
+          <div className="space-y-12">
+            <div className="space-y-8">
+              <h1 className="text-6xl md:text-7xl font-bold tracking-tight leading-tight">
+                同盟管理中心
                 <br />
-                <span className="text-primary">一目了然</span>
-              </h2>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                三國志戰略版盟友管理系統，幫助盟主/官員輕鬆追蹤成員表現，
-                透過 CSV 上傳實現自動化數據分析。
+                <span className="text-primary">數據驅動決策</span>
+              </h1>
+              <p className="text-2xl text-muted-foreground leading-relaxed max-w-xl">
+                官員專屬的數據管理平台
+                <br />
+                透過 CSV 即時追蹤成員表現
               </p>
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-4 pt-4">
-              <div>
-                <div className="text-3xl font-bold text-primary">3 分鐘</div>
-                <p className="text-sm text-muted-foreground">快速設定</p>
+            <div className="grid grid-cols-3 gap-10 pt-6">
+              <div className="space-y-3">
+                <div className="text-5xl font-bold text-primary whitespace-nowrap">5 分鐘</div>
+                <p className="text-lg text-muted-foreground whitespace-nowrap">快速上手</p>
               </div>
-              <div>
-                <div className="text-3xl font-bold text-primary">5 指標</div>
-                <p className="text-sm text-muted-foreground">表現追蹤</p>
+              <div className="space-y-3">
+                <div className="text-5xl font-bold text-primary whitespace-nowrap">13 項</div>
+                <p className="text-lg text-muted-foreground whitespace-nowrap">核心指標</p>
               </div>
-              <div>
-                <div className="text-3xl font-bold text-primary">100%</div>
-                <p className="text-sm text-muted-foreground">資料安全</p>
+              <div className="space-y-3">
+                <div className="text-5xl font-bold text-primary whitespace-nowrap">即時</div>
+                <p className="text-lg text-muted-foreground whitespace-nowrap">數據更新</p>
               </div>
             </div>
           </div>
 
           {/* Right: Login Card */}
-          <div className="flex justify-center">
-            <Card className="w-full max-w-md shadow-xl">
-              <CardHeader className="space-y-3">
-                <CardTitle className="text-2xl text-center">開始使用</CardTitle>
-                <CardDescription className="text-center">
-                  使用 Google 帳戶快速登入
+          <div className="flex justify-center lg:justify-end">
+            <Card className="w-full max-w-xl shadow-2xl border-2">
+              <CardHeader className="space-y-4 pb-10">
+                <CardTitle className="text-4xl text-center font-bold">開始使用</CardTitle>
+                <CardDescription className="text-center text-lg">
+                  使用 Google 帳戶登入系統
                 </CardDescription>
               </CardHeader>
 
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-8 pb-10">
                 {/* Error Message */}
                 {error && (
                   <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4">
@@ -123,13 +130,13 @@ export function Landing() {
                 {/* Google OAuth Button */}
                 <Button
                   size="lg"
-                  className="w-full h-14 text-base font-medium shadow-sm hover:shadow-md transition-shadow"
+                  className="w-full h-16 text-xl font-medium"
                   onClick={() => handleOAuthLogin('google')}
                   disabled={isLoading !== null}
                 >
                   {isLoading === 'google' ? (
                     <>
-                      <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                      <Loader2 className="mr-3 h-6 w-6 animate-spin" />
                       登入中...
                     </>
                   ) : (
@@ -140,72 +147,66 @@ export function Landing() {
                   )}
                 </Button>
 
-                {/* Terms */}
-                <p className="text-xs text-center text-muted-foreground leading-relaxed">
-                  登入即表示您同意我們的
-                  <a href="#" className="underline hover:text-primary transition-colors">
-                    服務條款
-                  </a>
-                  和
-                  <a href="#" className="underline hover:text-primary transition-colors">
-                    隱私政策
-                  </a>
+                <p className="text-base text-center text-muted-foreground leading-relaxed pt-2">
+                  登入即表示您同意我們的服務條款和隱私政策
                 </p>
               </CardContent>
             </Card>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Features Section */}
-      <section className="border-t bg-muted/30">
-        <div className="container mx-auto px-4 py-16">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold mb-4">核心功能</h3>
-            <p className="text-muted-foreground">
-              專為三國志戰略版盟主打造的管理工具
+        {/* Features Section */}
+        <section className="border-t bg-muted/30">
+        <div className="container mx-auto px-4 py-10">
+          <div className="text-center mb-8 space-y-2">
+            <h2 className="text-3xl font-bold">核心功能</h2>
+            <p className="text-muted-foreground text-lg">
+              為同盟幹部打造的管理工具
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURES.map((feature, index) => (
-              <Card key={index} className="text-center hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <feature.icon className="h-12 w-12 text-primary mx-auto mb-4" />
-                  <CardTitle className="text-lg">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {feature.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {FEATURES.map((feature, index) => {
+              const Icon = feature.icon
+              return (
+                <Card key={index} className="text-center border-2 hover:border-primary/50 hover:shadow-lg transition-all">
+                  <CardHeader className="space-y-4">
+                    <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <Icon className="h-8 w-8 text-primary" />
+                    </div>
+                    <CardTitle className="text-xl whitespace-nowrap">{feature.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {feature.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </div>
-      </section>
+        </section>
+      </div>
 
       {/* Footer */}
-      <footer className="border-t py-8 bg-background">
+      <footer className="border-t py-8 bg-background flex-shrink-0">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-6 w-6 text-primary" />
-              <p className="text-sm text-muted-foreground">
-                © 2025 三國志戰略版管理系統
+            <div className="flex items-center gap-3">
+              <img
+                src="/assets/logo.png"
+                alt="三國志戰略版"
+                className="h-8 w-8 object-contain"
+              />
+              <p className="text-sm text-muted-foreground whitespace-nowrap">
+                © 2025 三國志戰略版同盟管理中心
               </p>
             </div>
-            <div className="flex gap-6 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-primary transition-colors">
-                關於我們
-              </a>
-              <a href="#" className="hover:text-primary transition-colors">
-                使用說明
-              </a>
-              <a href="#" className="hover:text-primary transition-colors">
-                聯絡我們
-              </a>
-            </div>
+            <p className="text-xs text-muted-foreground whitespace-nowrap">
+              Version 0.1.0
+            </p>
           </div>
         </div>
       </footer>

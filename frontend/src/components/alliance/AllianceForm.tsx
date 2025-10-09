@@ -1,14 +1,3 @@
-/**
- * Alliance Form Component (Unified)
- *
- * Handles both alliance creation and updates with consistent UI
- * 符合 CLAUDE.md 🔴:
- * - ES imports only
- * - Explicit TypeScript interfaces
- * - TanStack Query for mutations
- * - DRY principle 🟢
- */
-
 import { useState, useEffect } from 'react'
 import { useAlliance, useCreateAlliance, useUpdateAlliance } from '@/hooks/use-alliance'
 import { Button } from '@/components/ui/button'
@@ -29,7 +18,6 @@ export const AllianceForm: React.FC = () => {
   const [name, setName] = useState('')
   const [serverName, setServerName] = useState('')
 
-  // Initialize form with current alliance data when editing
   useEffect(() => {
     if (alliance) {
       setName(alliance.name)
