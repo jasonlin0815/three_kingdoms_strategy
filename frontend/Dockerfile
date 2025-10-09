@@ -14,8 +14,8 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (including package-lock.json)
+COPY package.json package-lock.json ./
 
 # Install dependencies
 # 使用 npm ci 確保依賴版本一致性
