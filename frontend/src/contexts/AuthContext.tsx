@@ -5,8 +5,6 @@ import { supabase, type Session, type User } from '@/lib/supabase'
 import { apiClient } from '@/lib/api-client'
 import type { Provider } from '@supabase/supabase-js'
 
-const IS_DEV = import.meta.env.DEV
-
 interface AuthState {
   user: User | null
   session: Session | null
@@ -29,10 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       apiClient.setAuthToken(session?.access_token ?? null)
-
       setAuthState({
         user: session?.user ?? null,
         session,
@@ -40,48 +36,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (IS_DEV) {
-          console.log('🔐 Auth state changed:', event, session?.user?.email)
-        }
-
         apiClient.setAuthToken(session?.access_token ?? null)
-
         setAuthState({
           user: session?.user ?? null,
           session,
           loading: false
         })
 
-        // Process pending invitations on sign-in
         if (event === 'SIGNED_IN' && session) {
           try {
-            if (IS_DEV) {
-              console.log('🔄 Processing pending invitations for:', session.user?.email)
-            }
-
             const result = await apiClient.processPendingInvitations()
-
-            if (IS_DEV) {
-              console.log('✅ Invitation processing result:', result)
-            }
-
-            // If invitations were processed, invalidate alliance queries
             if (result.processed_count > 0) {
-              if (IS_DEV) {
-                console.log(`🎉 ${result.processed_count} invitation(s) accepted!`)
-              }
-
-              // Invalidate alliance query to refetch
               await queryClient.invalidateQueries({ queryKey: ['alliance'] })
             }
-          } catch (error) {
-            if (IS_DEV) {
-              console.error('❌ Failed to process pending invitations:', error)
-            }
-            // Don't block login
+          } catch {
+            // Don't block login on invitation processing failure
           }
         }
       }
@@ -94,8 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        // Request additional scopes to get user's name and profile picture
+        redirectTo: window.location.origin,
         scopes: 'openid email profile'
       }
     })
