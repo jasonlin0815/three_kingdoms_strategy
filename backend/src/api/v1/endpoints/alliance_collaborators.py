@@ -20,11 +20,11 @@ from src.models.alliance_collaborator import (
 )
 from src.services.alliance_collaborator_service import AllianceCollaboratorService
 
-router = APIRouter(prefix="/alliances", tags=["alliance-collaborators"])
+router = APIRouter(tags=["alliance-collaborators"])
 
 
 @router.post(
-    "/{alliance_id}/collaborators",
+    "/alliances/{alliance_id}/collaborators",
     status_code=status.HTTP_201_CREATED,
     summary="Add collaborator to alliance",
 )
@@ -58,7 +58,7 @@ async def add_alliance_collaborator(
 
 
 @router.get(
-    "/{alliance_id}/collaborators",
+    "/alliances/{alliance_id}/collaborators",
     response_model=AllianceCollaboratorListResponse,
     summary="Get alliance collaborators",
 )
@@ -87,7 +87,7 @@ async def get_alliance_collaborators(
 
 
 @router.delete(
-    "/{alliance_id}/collaborators/{user_id}",
+    "/alliances/{alliance_id}/collaborators/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove collaborator from alliance",
 )
