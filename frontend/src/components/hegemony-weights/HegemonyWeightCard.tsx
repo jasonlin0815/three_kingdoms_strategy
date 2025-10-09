@@ -92,6 +92,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
       !isLoadingWeights &&
       (!weights || weights.length === 0) &&
       !initializeMutation.isPending &&
+      !initializeMutation.isSuccess &&
       !hasAttemptedInit
 
     if (shouldAutoInit) {
@@ -104,7 +105,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoadingWeights, weights?.length, initializeMutation.isPending, hasAttemptedInit])
+  }, [isLoadingWeights, weights?.length, initializeMutation.isPending, initializeMutation.isSuccess, hasAttemptedInit])
 
   /**
    * Update Tier 1 weight (indicator weights)
@@ -255,8 +256,20 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
           </div>
         )}
 
+        {/* Empty State - No CSV uploads (initialization succeeded but returned empty) */}
+        {!isLoadingWeights && localWeights.length === 0 && initializeMutation.isSuccess && (
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                此賽季尚未上傳任何 CSV 數據快照。請先前往「資料管理」頁面上傳數據後，再進行權重配置。
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+
         {/* Empty State - Auto-initializing */}
-        {!isLoadingWeights && localWeights.length === 0 && (
+        {!isLoadingWeights && localWeights.length === 0 && !initializeMutation.isSuccess && (
           <div className="space-y-4">
             <Alert>
               <Loader2 className="h-4 w-4 animate-spin" />

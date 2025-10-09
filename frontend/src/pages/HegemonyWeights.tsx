@@ -48,17 +48,11 @@ const HegemonyWeights: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">霸業權重配置</h2>
-          <p className="text-muted-foreground mt-1">
-            設定各賽季的指標權重與時間點權重，用於計算盟友霸業排名
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Scale className="h-4 w-4" />
-          <span>兩層權重系統</span>
-        </div>
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">霸業權重配置</h2>
+        <p className="text-muted-foreground mt-1">
+          設定各賽季的指標權重與時間點權重，用於計算盟友霸業排名
+        </p>
       </div>
 
       {/* Info Card */}
@@ -67,7 +61,7 @@ const HegemonyWeights: React.FC = () => {
         <ul className="space-y-1 text-sm text-muted-foreground">
           <li>
             <strong>指標權重：</strong>
-            每個快照內「總貢獻/總功績/總協助/總捐獻」的比重（總和需為 100%）
+            每個快照內「貢獻/戰功/助攻/捐獻」的比重（總和需為 100%）
           </li>
           <li>
             <strong>快照權重：</strong>

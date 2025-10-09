@@ -212,7 +212,7 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
 
   const icon = <FileText className="h-4 w-4" />
 
-  const title = `${season.name} - CSV 上傳`
+  const title = season.name
 
   const badge = season.is_active ? (
     <Badge variant="default" className="text-xs">
