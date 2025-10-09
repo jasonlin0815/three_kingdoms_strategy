@@ -71,3 +71,28 @@ export const useRemoveAllianceCollaborator = () => {
     }
   })
 }
+
+/**
+ * Update collaborator role in alliance
+ */
+export const useUpdateCollaboratorRole = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      allianceId,
+      userId,
+      newRole
+    }: {
+      allianceId: string
+      userId: string
+      newRole: string
+    }) => apiClient.updateCollaboratorRole(allianceId, userId, newRole),
+    onSuccess: (_, { allianceId }) => {
+      // Invalidate collaborators list
+      queryClient.invalidateQueries({
+        queryKey: collaboratorKeys.byAlliance(allianceId)
+      })
+    }
+  })
+}

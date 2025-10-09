@@ -22,6 +22,7 @@ from src.repositories.hegemony_weight_repository import HegemonyWeightRepository
 from src.repositories.member_repository import MemberRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.repositories.season_repository import SeasonRepository
+from src.services.permission_service import PermissionService
 
 
 class HegemonyWeightService:
@@ -35,14 +36,18 @@ class HegemonyWeightService:
         self._upload_repo = CsvUploadRepository()
         self._member_repo = MemberRepository()
         self._snapshot_repo = MemberSnapshotRepository()
+        self._permission_service = PermissionService()
 
-    async def _verify_season_access(self, user_id: UUID, season_id: UUID) -> tuple:
+    async def _verify_season_access(
+        self, user_id: UUID, season_id: UUID, required_roles: list[str]
+    ) -> tuple:
         """
-        Verify user has access to season and return season and alliance.
+        Verify user has access to season with required role and return season and alliance.
 
         Args:
             user_id: User UUID
             season_id: Season UUID
+            required_roles: List of acceptable roles (e.g., ['owner', 'collaborator'])
 
         Returns:
             Tuple of (season, alliance)
@@ -50,6 +55,7 @@ class HegemonyWeightService:
         Raises:
             ValueError: If season not found
             PermissionError: If user doesn't own the season
+            HTTPException 403: If user doesn't have required role
         """
         season = await self._season_repo.get_by_id(season_id)
         if not season:
@@ -59,6 +65,11 @@ class HegemonyWeightService:
         if not alliance or alliance.id != season.alliance_id:
             raise PermissionError("You don't have permission to access this season")
 
+        # Verify permission with required roles
+        await self._permission_service.require_permission(
+            user_id, alliance.id, required_roles, "manage hegemony weights"
+        )
+
         return season, alliance
 
     async def get_season_weights(
@@ -66,6 +77,8 @@ class HegemonyWeightService:
     ) -> list[HegemonyWeightWithSnapshot]:
         """
         Get all hegemony weight configurations for a season with snapshot info.
+
+        Permission: all members (read-only)
 
         Args:
             user_id: User UUID (for permission check)
@@ -76,8 +89,10 @@ class HegemonyWeightService:
 
         Raises:
             PermissionError: If user doesn't own the season
+            HTTPException 403: If user is not a member
         """
-        await self._verify_season_access(user_id, season_id)
+        # All members can view weights
+        await self._verify_season_access(user_id, season_id, ['owner', 'collaborator', 'member'])
         return await self._weight_repo.get_with_snapshot_info(season_id)
 
     async def get_weights_summary(
@@ -114,6 +129,8 @@ class HegemonyWeightService:
         """
         Initialize default hegemony weight configurations for all CSV uploads in a season.
 
+        Permission: owner + collaborator
+
         Creates weight configurations with default values:
         - Equal distribution: Contribution 25%, Merit 25%, Assist 25%, Donation 25%
         - Snapshot weights evenly distributed (e.g., 2 uploads = 50% each)
@@ -124,8 +141,11 @@ class HegemonyWeightService:
 
         Returns:
             List of created HegemonyWeight objects
+
+        Raises:
+            HTTPException 403: If user doesn't have permission
         """
-        _, alliance = await self._verify_season_access(user_id, season_id)
+        _, alliance = await self._verify_season_access(user_id, season_id, ['owner', 'collaborator'])
 
         # Get all CSV uploads for this season
         uploads = await self._upload_repo.get_by_season(season_id)
@@ -165,6 +185,8 @@ class HegemonyWeightService:
         """
         Create a new hegemony weight configuration.
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID
             season_id: Season UUID
@@ -172,8 +194,11 @@ class HegemonyWeightService:
 
         Returns:
             Created HegemonyWeight object
+
+        Raises:
+            HTTPException 403: If user doesn't have permission
         """
-        _, alliance = await self._verify_season_access(user_id, season_id)
+        _, alliance = await self._verify_season_access(user_id, season_id, ['owner', 'collaborator'])
 
         # Verify CSV upload exists and belongs to this season
         upload = await self._upload_repo.get_by_id(data.csv_upload_id)
@@ -197,6 +222,8 @@ class HegemonyWeightService:
         """
         Update an existing hegemony weight configuration.
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID
             weight_id: HegemonyWeight UUID
@@ -204,6 +231,9 @@ class HegemonyWeightService:
 
         Returns:
             Updated HegemonyWeight object
+
+        Raises:
+            HTTPException 403: If user doesn't have permission
         """
         # Verify weight exists and user owns it
         weight = await self._weight_repo.get_by_id(weight_id)
@@ -213,6 +243,11 @@ class HegemonyWeightService:
         alliance = await self._alliance_repo.get_by_collaborator(user_id)
         if not alliance or alliance.id != weight.alliance_id:
             raise PermissionError("You don't have permission to update this weight")
+
+        # Verify permission: owner or collaborator can update weights
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, alliance.id, "update hegemony weights"
+        )
 
         return await self._weight_repo.update_weights(
             weight_id=weight_id,
@@ -227,12 +262,17 @@ class HegemonyWeightService:
         """
         Delete a hegemony weight configuration.
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID
             weight_id: HegemonyWeight UUID
 
         Returns:
             True if deleted successfully
+
+        Raises:
+            HTTPException 403: If user doesn't have permission
         """
         # Verify weight exists and user owns it
         weight = await self._weight_repo.get_by_id(weight_id)
@@ -243,6 +283,11 @@ class HegemonyWeightService:
         if not alliance or alliance.id != weight.alliance_id:
             raise PermissionError("You don't have permission to delete this weight")
 
+        # Verify permission: owner or collaborator can delete weights
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, alliance.id, "delete hegemony weights"
+        )
+
         return await self._weight_repo.delete(weight_id)
 
     async def calculate_hegemony_scores(
@@ -250,6 +295,8 @@ class HegemonyWeightService:
     ) -> list[HegemonyScorePreview]:
         """
         Calculate hegemony scores for top members in a season.
+
+        Permission: all members (read-only)
 
         Calculation steps:
         1. For each snapshot, calculate member score using tier 1 weights:
@@ -266,9 +313,13 @@ class HegemonyWeightService:
         Returns:
             List of HegemonyScorePreview objects sorted by final score (descending)
 
+        Raises:
+            HTTPException 403: If user is not a member
+
         Performance: Optimized to avoid N+1 queries by fetching all snapshots at once
         """
-        _, alliance = await self._verify_season_access(user_id, season_id)
+        # All members can view scores
+        _, alliance = await self._verify_season_access(user_id, season_id, ['owner', 'collaborator', 'member'])
 
         # Get all weight configurations for this season
         weights = await self._weight_repo.get_with_snapshot_info(season_id)

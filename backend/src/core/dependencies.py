@@ -11,6 +11,7 @@ from src.core.database import get_supabase_client
 from src.services.alliance_collaborator_service import AllianceCollaboratorService
 from src.services.alliance_service import AllianceService
 from src.services.csv_upload_service import CSVUploadService
+from src.services.permission_service import PermissionService
 from src.services.season_service import SeasonService
 
 
@@ -97,3 +98,22 @@ def get_alliance_collaborator_service() -> AllianceCollaboratorService:
     符合 CLAUDE.md 🔴: Provider Pattern for service injection
     """
     return AllianceCollaboratorService()
+
+
+def get_permission_service() -> PermissionService:
+    """
+    Get permission service instance
+
+    Returns:
+        PermissionService instance
+
+    Usage:
+        @app.get("/endpoint")
+        async def endpoint(
+            permission_service: Annotated[PermissionService, Depends(get_permission_service)]
+        ):
+            pass
+
+    符合 CLAUDE.md 🔴: Provider Pattern for service injection
+    """
+    return PermissionService()

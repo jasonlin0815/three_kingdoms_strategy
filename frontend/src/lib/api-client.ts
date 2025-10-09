@@ -127,6 +127,32 @@ class ApiClient {
     return response.data
   }
 
+  /**
+   * Update collaborator role in alliance
+   */
+  async updateCollaboratorRole(
+    allianceId: string,
+    userId: string,
+    newRole: string
+  ): Promise<{ id: string; user_id: string; role: string; updated_at: string }> {
+    const response = await this.client.patch<{ id: string; user_id: string; role: string; updated_at: string }>(
+      `/api/v1/alliances/${allianceId}/collaborators/${userId}/role`,
+      null,
+      { params: { new_role: newRole } }
+    )
+    return response.data
+  }
+
+  /**
+   * Get current user's role in alliance
+   */
+  async getMyRole(allianceId: string): Promise<{ role: string }> {
+    const response = await this.client.get<{ role: string }>(
+      `/api/v1/alliances/${allianceId}/my-role`
+    )
+    return response.data
+  }
+
   // ==================== Season API ====================
 
   /**

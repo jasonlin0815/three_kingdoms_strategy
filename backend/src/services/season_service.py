@@ -12,6 +12,7 @@ from uuid import UUID
 from src.models.season import Season, SeasonCreate, SeasonUpdate
 from src.repositories.alliance_repository import AllianceRepository
 from src.repositories.season_repository import SeasonRepository
+from src.services.permission_service import PermissionService
 
 
 class SeasonService:
@@ -25,6 +26,7 @@ class SeasonService:
         """Initialize season service with repositories"""
         self._repo = SeasonRepository()
         self._alliance_repo = AllianceRepository()
+        self._permission_service = PermissionService()
 
     async def get_seasons(self, user_id: UUID, active_only: bool = False) -> list[Season]:
         """
@@ -101,6 +103,8 @@ class SeasonService:
         """
         Create new season for user's alliance
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID from authentication
             season_data: Season creation data
@@ -111,6 +115,7 @@ class SeasonService:
         Raises:
             ValueError: If user has no alliance
             PermissionError: If alliance_id doesn't match user's alliance
+            HTTPException 403: If user doesn't have permission
         """
         # Verify user has alliance
         alliance = await self._alliance_repo.get_by_collaborator(user_id)
@@ -120,6 +125,11 @@ class SeasonService:
         # Verify alliance_id matches user's alliance
         if season_data.alliance_id != alliance.id:
             raise PermissionError("Cannot create season for different alliance")
+
+        # Verify permission: owner or collaborator can create seasons
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, alliance.id, "create seasons"
+        )
 
         # Create season
         data = season_data.model_dump()
@@ -139,6 +149,8 @@ class SeasonService:
         """
         Update existing season
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID from authentication
             season_id: Season UUID
@@ -150,9 +162,15 @@ class SeasonService:
         Raises:
             ValueError: If user has no alliance or season not found
             PermissionError: If user doesn't own the season
+            HTTPException 403: If user doesn't have permission
         """
         # Verify ownership through get_season
-        await self.get_season(user_id, season_id)
+        season = await self.get_season(user_id, season_id)
+
+        # Verify permission: owner or collaborator can update seasons
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, season.alliance_id, "update seasons"
+        )
 
         # Update only provided fields
         update_data = season_data.model_dump(exclude_unset=True)
@@ -169,6 +187,8 @@ class SeasonService:
         """
         Delete season (hard delete, CASCADE will remove related data)
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID from authentication
             season_id: Season UUID
@@ -179,15 +199,23 @@ class SeasonService:
         Raises:
             ValueError: If user has no alliance or season not found
             PermissionError: If user doesn't own the season
+            HTTPException 403: If user doesn't have permission
         """
         # Verify ownership through get_season
-        await self.get_season(user_id, season_id)
+        season = await self.get_season(user_id, season_id)
+
+        # Verify permission: owner or collaborator can delete seasons
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, season.alliance_id, "delete seasons"
+        )
 
         return await self._repo.delete(season_id)
 
     async def set_active_season(self, user_id: UUID, season_id: UUID) -> Season:
         """
         Set a season as active and deactivate all others for the alliance
+
+        Permission: owner + collaborator
 
         Args:
             user_id: User UUID from authentication
@@ -199,14 +227,20 @@ class SeasonService:
         Raises:
             ValueError: If user has no alliance or season not found
             PermissionError: If user doesn't own the season
+            HTTPException 403: If user doesn't have permission
         """
         # Verify ownership
         alliance = await self._alliance_repo.get_by_collaborator(user_id)
         if not alliance:
             raise ValueError("User has no alliance")
 
-        # Verify user owns the season
+        # Verify user owns the season (raises error if not)
         await self.get_season(user_id, season_id)
+
+        # Verify permission: owner or collaborator can activate seasons
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, alliance.id, "activate seasons"
+        )
 
         # Deactivate all seasons for this alliance
         all_seasons = await self._repo.get_by_alliance(alliance.id)

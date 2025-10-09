@@ -166,3 +166,74 @@ async def process_pending_invitations(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process invitations",
         ) from e
+
+
+@router.patch(
+    "/alliances/{alliance_id}/collaborators/{user_id}/role",
+    status_code=status.HTTP_200_OK,
+    summary="Update collaborator role",
+)
+async def update_collaborator_role(
+    alliance_id: UUID,
+    user_id: UUID,
+    new_role: str,
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)],
+    service: Annotated[
+        AllianceCollaboratorService, Depends(get_alliance_collaborator_service)
+    ],
+):
+    """
+    Update a collaborator's role in alliance.
+
+    Requirements:
+    - Only owner can update roles
+    - Cannot change owner's role
+    - Cannot change your own role (prevent self-privilege escalation)
+    - Valid roles: 'collaborator', 'member'
+
+    Returns:
+    - 200: Role updated successfully
+    - 400: Invalid role or operation
+    - 403: Permission denied (not owner)
+
+    符合 CLAUDE.md 🔴: API layer delegates to service
+    """
+    return await service.update_collaborator_role(
+        current_user_id, alliance_id, user_id, new_role
+    )
+
+
+@router.get(
+    "/alliances/{alliance_id}/my-role",
+    status_code=status.HTTP_200_OK,
+    summary="Get current user's role in alliance",
+)
+async def get_my_role(
+    alliance_id: UUID,
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)],
+    service: Annotated[
+        AllianceCollaboratorService, Depends(get_alliance_collaborator_service)
+    ],
+):
+    """
+    Get current user's role in alliance.
+
+    Returns:
+    - 200: {"role": "owner|collaborator|member"}
+    - 404: User is not a member of this alliance
+
+    符合 CLAUDE.md 🔴: API layer delegates to service
+    """
+    # Use PermissionService to get role
+    from src.core.dependencies import get_permission_service
+
+    permission_service = get_permission_service()
+    role = await permission_service.get_user_role(current_user_id, alliance_id)
+
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You are not a member of this alliance",
+        )
+
+    return {"role": role}

@@ -21,6 +21,7 @@ from src.repositories.member_repository import MemberRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.repositories.season_repository import SeasonRepository
 from src.services.csv_parser_service import CSVParserService
+from src.services.permission_service import PermissionService
 
 
 class CSVUploadService:
@@ -34,6 +35,7 @@ class CSVUploadService:
         self._season_repo = SeasonRepository()
         self._alliance_repo = AllianceRepository()
         self._collaborator_repo = AllianceCollaboratorRepository()
+        self._permission_service = PermissionService()
         self._parser = CSVParserService()
 
     async def upload_csv(
@@ -47,6 +49,8 @@ class CSVUploadService:
         """
         Complete CSV upload workflow
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID (for authorization)
             season_id: Season UUID
@@ -59,6 +63,7 @@ class CSVUploadService:
 
         Raises:
             HTTPException: If validation fails or user unauthorized
+            HTTPException 403: If user doesn't have permission
 
         Workflow:
             1. Validate user owns the season
@@ -77,14 +82,10 @@ class CSVUploadService:
         if not season:
             raise HTTPException(status_code=404, detail="Season not found")
 
-        # Verify user is a collaborator of the alliance
-        is_collaborator = await self._collaborator_repo.is_collaborator(
-            alliance_id=season.alliance_id, user_id=user_id
+        # Verify permission: owner or collaborator can upload CSV
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, season.alliance_id, "upload CSV data"
         )
-        if not is_collaborator:
-            raise HTTPException(
-                status_code=403, detail="Unauthorized: You are not a collaborator of this alliance"
-            )
 
         # Get alliance for subsequent operations
         alliance = await self._alliance_repo.get_by_id(season.alliance_id)
@@ -196,6 +197,8 @@ class CSVUploadService:
         """
         Get all CSV uploads for a season
 
+        Permission: all members (read-only)
+
         Args:
             user_id: User UUID (for authorization)
             season_id: Season UUID
@@ -203,19 +206,21 @@ class CSVUploadService:
         Returns:
             List of upload records
 
+        Raises:
+            HTTPException 403: If user doesn't have permission
+
         符合 CLAUDE.md 🔴: Service layer authorization
         """
-        # Validate user is a collaborator of the season's alliance
+        # Validate user is a member of the season's alliance
         season = await self._season_repo.get_by_id(season_id)
         if not season:
             raise HTTPException(status_code=404, detail="Season not found")
 
-        is_collaborator = await self._collaborator_repo.is_collaborator(
-            alliance_id=season.alliance_id, user_id=user_id
-        )
-        if not is_collaborator:
+        # Verify permission: all members can view uploads
+        role = await self._permission_service.get_user_role(user_id, season.alliance_id)
+        if role is None:
             raise HTTPException(
-                status_code=403, detail="Unauthorized: You are not a collaborator of this alliance"
+                status_code=403, detail="You are not a member of this alliance"
             )
 
         uploads = await self._csv_upload_repo.get_by_season(season_id)
@@ -237,12 +242,17 @@ class CSVUploadService:
         """
         Delete a CSV upload (with cascading snapshots)
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID (for authorization)
             upload_id: CSV upload UUID
 
         Returns:
             True if deleted successfully
+
+        Raises:
+            HTTPException 403: If user doesn't have permission
 
         符合 CLAUDE.md 🔴: Service layer authorization
         """
@@ -251,18 +261,15 @@ class CSVUploadService:
         if not upload:
             raise HTTPException(status_code=404, detail="Upload not found")
 
-        # Verify user is a collaborator of the alliance
+        # Verify user is owner or collaborator of the alliance
         season = await self._season_repo.get_by_id(upload.season_id)
         if not season:
             raise HTTPException(status_code=404, detail="Season not found")
 
-        is_collaborator = await self._collaborator_repo.is_collaborator(
-            alliance_id=season.alliance_id, user_id=user_id
+        # Verify permission: owner or collaborator can delete uploads
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, season.alliance_id, "delete CSV uploads"
         )
-        if not is_collaborator:
-            raise HTTPException(
-                status_code=403, detail="Unauthorized: You are not a collaborator of this alliance"
-            )
 
         # Delete upload (CASCADE will delete snapshots)
         return await self._csv_upload_repo.delete(upload_id)

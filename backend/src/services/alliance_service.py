@@ -14,6 +14,7 @@ from src.repositories.alliance_collaborator_repository import (
     AllianceCollaboratorRepository,
 )
 from src.repositories.alliance_repository import AllianceRepository
+from src.services.permission_service import PermissionService
 
 
 class AllianceService:
@@ -27,6 +28,7 @@ class AllianceService:
         """Initialize alliance service with repositories"""
         self._repo = AllianceRepository()
         self._collaborator_repo = AllianceCollaboratorRepository()
+        self._permission_service = PermissionService()
 
     async def get_user_alliance(self, user_id: UUID) -> Alliance | None:
         """
@@ -87,6 +89,8 @@ class AllianceService:
         """
         Update user's alliance.
 
+        Permission: owner + collaborator
+
         Args:
             user_id: User UUID from authentication
             alliance_data: Alliance update data
@@ -96,6 +100,7 @@ class AllianceService:
 
         Raises:
             ValueError: If user has no alliance
+            HTTPException 403: If user doesn't have permission
 
         Note:
             Changed from get_by_user_id() to get_by_collaborator()
@@ -104,6 +109,11 @@ class AllianceService:
         alliance = await self._repo.get_by_collaborator(user_id)
         if not alliance:
             raise ValueError("User has no alliance to update")
+
+        # Verify permission: owner or collaborator can update alliance
+        await self._permission_service.require_owner_or_collaborator(
+            user_id, alliance.id, "update alliance settings"
+        )
 
         # Update only provided fields
         update_data = alliance_data.model_dump(exclude_unset=True)
@@ -114,6 +124,8 @@ class AllianceService:
         """
         Delete user's alliance (only owner can delete).
 
+        Permission: owner only
+
         Args:
             user_id: User UUID from authentication
 
@@ -121,7 +133,8 @@ class AllianceService:
             True if deleted successfully
 
         Raises:
-            ValueError: If user has no alliance or not owner
+            ValueError: If user has no alliance
+            HTTPException 403: If user is not owner
 
         Note:
             Phase 1 Change:
@@ -133,10 +146,10 @@ class AllianceService:
         if not alliance:
             raise ValueError("User has no alliance to delete")
 
-        # Verify user is owner
-        role = await self._collaborator_repo.get_collaborator_role(alliance.id, user_id)
-        if role != "owner":
-            raise ValueError("Only alliance owner can delete alliance")
+        # Verify permission: only owner can delete alliance
+        await self._permission_service.require_owner(
+            user_id, alliance.id, "delete alliance"
+        )
 
         # Delete alliance (collaborators will be deleted via CASCADE)
         return await self._repo.delete(alliance.id)

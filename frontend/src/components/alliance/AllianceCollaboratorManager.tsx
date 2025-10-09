@@ -13,10 +13,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
   useAllianceCollaborators,
   useAddAllianceCollaborator,
-  useRemoveAllianceCollaborator
+  useRemoveAllianceCollaborator,
+  useUpdateCollaboratorRole
 } from '@/hooks/use-alliance-collaborators'
+import { useCanManageCollaborators } from '@/hooks/use-user-role'
+import { RoleGuard } from '@/components/alliance/RoleGuard'
 
 interface AllianceCollaboratorManagerProps {
   readonly allianceId: string
@@ -32,6 +42,8 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
   const { data: collaboratorsData, isLoading } = useAllianceCollaborators(allianceId)
   const addCollaborator = useAddAllianceCollaborator()
   const removeCollaborator = useRemoveAllianceCollaborator()
+  const updateRole = useUpdateCollaboratorRole()
+  const canManageCollaborators = useCanManageCollaborators()
 
   const handleAddCollaborator = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,6 +113,34 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
     }
   }
 
+  const handleUpdateRole = async (userId: string, newRole: string, userEmail: string) => {
+    setSuccessMessage(null)
+    setErrorMessage(null)
+
+    try {
+      await updateRole.mutateAsync({ allianceId, userId, newRole })
+      setSuccessMessage(`已更新 ${userEmail} 的角色`)
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '請稍後再試'
+      setErrorMessage(`更新角色失敗: ${message}`)
+    }
+  }
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return '👑 擁有者'
+      case 'collaborator':
+        return '🤝 協作者'
+      case 'member':
+        return '👤 成員'
+      default:
+        return role
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -109,21 +149,22 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Add Collaborator Form */}
-        <form onSubmit={handleAddCollaborator} className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              type="email"
-              placeholder="輸入成員的 email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={addCollaborator.isPending}
-            />
-            <Button type="submit" disabled={addCollaborator.isPending}>
-              {addCollaborator.isPending ? '新增中...' : '新增成員'}
-            </Button>
-          </div>
+        {/* Add Collaborator Form - Only visible to owners */}
+        <RoleGuard requiredRoles={['owner']}>
+          <form onSubmit={handleAddCollaborator} className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder="輸入成員的 email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={addCollaborator.isPending}
+              />
+              <Button type="submit" disabled={addCollaborator.isPending}>
+                {addCollaborator.isPending ? '新增中...' : '新增成員'}
+              </Button>
+            </div>
 
           {/* Success/Error Messages */}
           {successMessage && (
@@ -137,7 +178,8 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
               {errorMessage}
             </div>
           )}
-        </form>
+          </form>
+        </RoleGuard>
 
         {/* Collaborators List */}
         <div className="space-y-2">
@@ -178,9 +220,8 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
                         {collaborator.user_full_name || collaborator.user_email || collaborator.user_id}
                       </p>
                       <p className="text-sm text-muted-foreground truncate">
-                        {collaborator.role === 'owner' ? '👑 擁有者' : '👤 成員'}
                         {collaborator.user_full_name && collaborator.user_email && (
-                          <> · {collaborator.user_email}</>
+                          <>{collaborator.user_email}</>
                         )}
                         {collaborator.joined_at && (
                           <>
@@ -192,22 +233,57 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
                     </div>
                   </div>
 
-                  {collaborator.role !== 'owner' && collaborator.user_id && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() =>
-                        handleRemoveCollaborator(
-                          collaborator.user_id!,
-                          collaborator.user_full_name || collaborator.user_email || 'Unknown'
-                        )
-                      }
-                      disabled={removeCollaborator.isPending}
-                      className="shrink-0"
-                    >
-                      移除
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Role Selector - Only for owners and non-owner users */}
+                    {collaborator.role === 'owner' ? (
+                      <div className="px-3 py-1.5 text-sm font-medium">
+                        {getRoleLabel(collaborator.role)}
+                      </div>
+                    ) : canManageCollaborators && collaborator.user_id ? (
+                      <Select
+                        value={collaborator.role}
+                        onValueChange={(newRole) =>
+                          handleUpdateRole(
+                            collaborator.user_id!,
+                            newRole,
+                            collaborator.user_full_name || collaborator.user_email || 'Unknown'
+                          )
+                        }
+                        disabled={updateRole.isPending}
+                      >
+                        <SelectTrigger className="w-[140px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="collaborator">🤝 協作者</SelectItem>
+                          <SelectItem value="member">👤 成員</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="px-3 py-1.5 text-sm">
+                        {getRoleLabel(collaborator.role)}
+                      </div>
+                    )}
+
+                    {/* Remove Button - Only for non-owners */}
+                    {canManageCollaborators &&
+                      collaborator.role !== 'owner' &&
+                      collaborator.user_id && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            handleRemoveCollaborator(
+                              collaborator.user_id!,
+                              collaborator.user_full_name || collaborator.user_email || 'Unknown'
+                            )
+                          }
+                          disabled={removeCollaborator.isPending}
+                        >
+                          移除
+                        </Button>
+                      )}
+                  </div>
                 </div>
               ))}
             </div>

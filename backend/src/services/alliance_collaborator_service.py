@@ -17,6 +17,7 @@ from src.repositories.alliance_collaborator_repository import (
     AllianceCollaboratorRepository,
 )
 from src.repositories.pending_invitation_repository import PendingInvitationRepository
+from src.services.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class AllianceCollaboratorService:
     def __init__(self):
         self._collaborator_repo = AllianceCollaboratorRepository()
         self._invitation_repo = PendingInvitationRepository()
+        self._permission_service = PermissionService()
         self._supabase = get_supabase_client()
 
     async def add_collaborator_by_email(
@@ -45,10 +47,9 @@ class AllianceCollaboratorService:
         Now supports inviting users who haven't registered yet!
 
         Business Rules:
-        - Phase 1: Any collaborator can add new collaborators
-        - Phase 2: Restrict to owner/admin only
-        - If user exists: Add immediately
-        - If user doesn't exist: Create pending invitation
+        - Only owner can add new collaborators (enforced by permission check)
+        - If user exists: Add immediately as 'member' role
+        - If user doesn't exist: Create pending invitation with 'member' role
 
         Args:
             current_user_id: Current authenticated user
@@ -63,14 +64,10 @@ class AllianceCollaboratorService:
             HTTPException 409: User already a collaborator or invitation exists
         """
         try:
-            # 1. Verify current user is collaborator of alliance
-            if not await self._collaborator_repo.is_collaborator(
-                alliance_id, current_user_id
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You are not a collaborator of this alliance",
-                )
+            # 1. Verify current user is owner of alliance (permission check)
+            await self._permission_service.require_owner(
+                current_user_id, alliance_id, "add collaborators"
+            )
 
             # 2. Look up user by email in auth.users
             result = self._supabase.auth.admin.list_users()
@@ -152,8 +149,7 @@ class AllianceCollaboratorService:
         Remove collaborator from alliance.
 
         Business Rules:
-        - Phase 1: Any collaborator can remove others (except owner and self)
-        - Phase 2: Restrict to owner/admin only
+        - Only owner can remove collaborators (enforced by permission check)
         - Cannot remove alliance owner
         - Cannot remove yourself
 
@@ -170,14 +166,10 @@ class AllianceCollaboratorService:
             HTTPException 400: Invalid operation
         """
         try:
-            # 1. Verify current user is collaborator
-            if not await self._collaborator_repo.is_collaborator(
-                alliance_id, current_user_id
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You are not a collaborator of this alliance",
-                )
+            # 1. Verify current user is owner (permission check)
+            await self._permission_service.require_owner(
+                current_user_id, alliance_id, "remove collaborators"
+            )
 
             # 2. Cannot remove owner
             target_role = await self._collaborator_repo.get_collaborator_role(
@@ -207,6 +199,89 @@ class AllianceCollaboratorService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to remove collaborator",
+            ) from e
+
+    async def update_collaborator_role(
+        self, current_user_id: UUID, alliance_id: UUID, target_user_id: UUID, new_role: str
+    ) -> dict:
+        """
+        Update collaborator's role in alliance.
+
+        Business Rules:
+        - Only owner can update roles
+        - Cannot change owner's role
+        - Cannot change your own role (prevent self-privilege escalation)
+        - Cannot promote to owner (owner transfer not yet supported)
+        - Valid roles: 'collaborator', 'member'
+
+        Args:
+            current_user_id: Current authenticated user
+            alliance_id: Alliance UUID
+            target_user_id: User whose role to update
+            new_role: New role ('collaborator' or 'member')
+
+        Returns:
+            dict: Updated collaborator information
+
+        Raises:
+            HTTPException 400: Invalid role or operation
+            HTTPException 403: Permission denied
+        """
+        try:
+            # 1. Verify current user is owner
+            await self._permission_service.require_owner(
+                current_user_id, alliance_id, "update collaborator roles"
+            )
+
+            # 2. Validate new role
+            if new_role not in ["collaborator", "member"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid role. Must be 'collaborator' or 'member'",
+                )
+
+            # 3. Cannot promote to owner (not supported yet)
+            if new_role == "owner":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot promote to owner. Owner transfer not yet supported.",
+                )
+
+            # 4. Cannot change your own role (prevent self-privilege modification)
+            if current_user_id == target_user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot change your own role",
+                )
+
+            # 5. Cannot change owner's role
+            target_role = await self._collaborator_repo.get_collaborator_role(
+                alliance_id, target_user_id
+            )
+            if target_role == "owner":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot change owner's role",
+                )
+
+            # 6. Update role
+            updated_collaborator = await self._collaborator_repo.update_role(
+                alliance_id, target_user_id, new_role
+            )
+
+            return {
+                "id": str(updated_collaborator.id),
+                "user_id": str(updated_collaborator.user_id),
+                "role": updated_collaborator.role,
+                "updated_at": updated_collaborator.joined_at.isoformat(),
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update collaborator role",
             ) from e
 
     async def get_user_email(self, user_id: UUID) -> str | None:

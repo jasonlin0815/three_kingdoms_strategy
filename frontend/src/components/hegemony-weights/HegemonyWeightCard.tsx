@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useCanManageWeights } from '@/hooks/use-user-role'
 import type { Season } from '@/types/season'
 import {
   useHegemonyWeights,
@@ -46,6 +47,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [hasAttemptedInit, setHasAttemptedInit] = useState(false)
+  const canManageWeights = useCanManageWeights()
 
   // Fetch weights for this season
   const { data: weights, isLoading: isLoadingWeights, refetch } = useHegemonyWeights(season.id)
@@ -291,12 +293,17 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                   {Math.round(localWeights.reduce((acc, w) => acc + w.snapshot_weight * 100, 0))}%
                 </Badge>
               </div>
-              <Button size="sm" variant="outline" onClick={handleDistributeEvenly}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDistributeEvenly}
+                disabled={!canManageWeights}
+              >
                 平均分配快照權重
               </Button>
             </div>
 
-            {/* Snapshots List (sorted by date) */}
+            {/* Snapshots List - All Roles (disabled for members) */}
             <div className="space-y-3">
               {localWeights
                 .map((weight, originalIndex) => ({ weight, originalIndex }))
@@ -338,6 +345,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                               inputMode="numeric"
                               defaultValue={Math.round(weight.weight_contribution * 100)}
                               onBlur={(e) => {
+                                if (!canManageWeights) return
                                 const value = parseInt(e.target.value, 10)
                                 if (!isNaN(value) && value >= 0 && value <= 100) {
                                   handleTier1Change(originalIndex, 'contribution', value / 100)
@@ -347,7 +355,8 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                   handleTier1Change(originalIndex, 'contribution', 1)
                                 }
                               }}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              disabled={!canManageWeights}
+                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
@@ -361,6 +370,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                               inputMode="numeric"
                               defaultValue={Math.round(weight.weight_merit * 100)}
                               onBlur={(e) => {
+                                if (!canManageWeights) return
                                 const value = parseInt(e.target.value, 10)
                                 if (!isNaN(value) && value >= 0 && value <= 100) {
                                   handleTier1Change(originalIndex, 'merit', value / 100)
@@ -370,7 +380,8 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                   handleTier1Change(originalIndex, 'merit', 1)
                                 }
                               }}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              disabled={!canManageWeights}
+                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
@@ -384,6 +395,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                               inputMode="numeric"
                               defaultValue={Math.round(weight.weight_assist * 100)}
                               onBlur={(e) => {
+                                if (!canManageWeights) return
                                 const value = parseInt(e.target.value, 10)
                                 if (!isNaN(value) && value >= 0 && value <= 100) {
                                   handleTier1Change(originalIndex, 'assist', value / 100)
@@ -393,7 +405,8 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                   handleTier1Change(originalIndex, 'assist', 1)
                                 }
                               }}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              disabled={!canManageWeights}
+                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
@@ -407,6 +420,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                               inputMode="numeric"
                               defaultValue={Math.round(weight.weight_donation * 100)}
                               onBlur={(e) => {
+                                if (!canManageWeights) return
                                 const value = parseInt(e.target.value, 10)
                                 if (!isNaN(value) && value >= 0 && value <= 100) {
                                   handleTier1Change(originalIndex, 'donation', value / 100)
@@ -416,7 +430,8 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                   handleTier1Change(originalIndex, 'donation', 1)
                                 }
                               }}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              disabled={!canManageWeights}
+                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
@@ -427,10 +442,11 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                           <div className="flex-1">
                             <Slider
                               value={[weight.snapshot_weight * 100]}
-                              onValueChange={([value]) => handleTier2Change(originalIndex, value / 100)}
+                              onValueChange={canManageWeights ? ([value]) => handleTier2Change(originalIndex, value / 100) : undefined}
                               min={0}
                               max={100}
                               step={1}
+                              disabled={!canManageWeights}
                               className="w-full"
                             />
                           </div>
@@ -442,6 +458,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                               inputMode="numeric"
                               defaultValue={Math.round(weight.snapshot_weight * 100)}
                               onBlur={(e) => {
+                                if (!canManageWeights) return
                                 const value = parseInt(e.target.value, 10)
                                 if (!isNaN(value) && value >= 0 && value <= 100) {
                                   handleTier2Change(originalIndex, value / 100)
@@ -451,7 +468,8 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                   handleTier2Change(originalIndex, 1)
                                 }
                               }}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              disabled={!canManageWeights}
+                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
@@ -467,8 +485,9 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                 })}
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-4">
+            {/* Action Buttons - Only for owners/collaborators */}
+            {canManageWeights && (
+              <div className="flex items-center gap-3 pt-4">
               <Button
                 onClick={handleSave}
                 disabled={!hasUnsavedChanges || !allValid || batchUpdateMutation.isPending}
@@ -497,10 +516,11 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                   </>
                 )}
               </Button>
-            </div>
+              </div>
+            )}
 
-            {/* Validation Warning */}
-            {!allValid && (
+            {/* Validation Warning - Only for owners/collaborators */}
+            {canManageWeights && !allValid && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
@@ -509,8 +529,8 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
               </Alert>
             )}
 
-            {/* Preview Section */}
-            {showPreview && (
+            {/* Preview Section - Available for all roles */}
+            {showPreview && canManageWeights && (
               <div className="space-y-4 pt-6 border-t">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold">霸業排名預覽（Top 10）</h4>

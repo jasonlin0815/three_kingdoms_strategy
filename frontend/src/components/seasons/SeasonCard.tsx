@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { useCanManageSeasons } from '@/hooks/use-user-role'
 import type { Season } from '@/types/season'
 
 interface SeasonCardProps {
@@ -39,6 +40,8 @@ export const SeasonCard: React.FC<SeasonCardProps> = ({
     end_date: season.end_date || '',
     description: season.description || ''
   })
+
+  const canManageSeasons = useCanManageSeasons()
 
   const handleEdit = useCallback(() => {
     setIsEditing(true)
@@ -76,7 +79,7 @@ export const SeasonCard: React.FC<SeasonCardProps> = ({
     await onDelete(season.id)
   }, [season.id, onDelete])
 
-  const actions = (
+  const actions = canManageSeasons ? (
     <div className="flex items-center gap-2">
       {isEditing ? (
         <>
@@ -129,7 +132,7 @@ export const SeasonCard: React.FC<SeasonCardProps> = ({
         </>
       )}
     </div>
-  )
+  ) : undefined
 
   const icon = <Calendar className="h-4 w-4" />
 

@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SeasonCard } from '@/components/seasons/SeasonCard'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
+import { RoleGuard } from '@/components/alliance/RoleGuard'
 import { useAlliance } from '@/hooks/use-alliance'
 import {
   useSeasons,
@@ -129,21 +130,24 @@ const Seasons: React.FC = () => {
             <h2 className="text-2xl font-bold tracking-tight">賽季管理</h2>
             <p className="text-muted-foreground mt-1">管理遊戲賽季與數據週期</p>
           </div>
-          {!isCreating && (
-            <Button onClick={() => setIsCreating(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              新增賽季
-            </Button>
-          )}
+          <RoleGuard requiredRoles={['owner', 'collaborator']}>
+            {!isCreating && (
+              <Button onClick={() => setIsCreating(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                新增賽季
+              </Button>
+            )}
+          </RoleGuard>
         </div>
 
       {/* Create New Season Card */}
-      {isCreating && (
-        <Card className="border-primary/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>建立新賽季</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <RoleGuard requiredRoles={['owner', 'collaborator']}>
+        {isCreating && (
+          <Card className="border-primary/50 shadow-sm">
+            <CardHeader>
+              <CardTitle>建立新賽季</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
             <div className="grid gap-4">
               <div className="space-y-2">
                 <Label htmlFor="new-season-name">賽季名稱 *</Label>
@@ -206,8 +210,9 @@ const Seasons: React.FC = () => {
               </Button>
             </div>
           </CardContent>
-        </Card>
-      )}
+          </Card>
+        )}
+      </RoleGuard>
 
       {/* Loading State */}
       {isLoading && (
@@ -223,10 +228,12 @@ const Seasons: React.FC = () => {
           <p className="text-sm text-muted-foreground max-w-md mb-6">
             建立第一個賽季以開始追蹤盟友表現數據。每個賽季可以設定時間範圍，方便進行數據分析與比較。
           </p>
-          <Button onClick={() => setIsCreating(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            建立第一個賽季
-          </Button>
+          <RoleGuard requiredRoles={['owner', 'collaborator']}>
+            <Button onClick={() => setIsCreating(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              建立第一個賽季
+            </Button>
+          </RoleGuard>
         </div>
       )}
 

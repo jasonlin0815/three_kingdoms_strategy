@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { useCanUploadData } from '@/hooks/use-user-role'
 import type { CsvUpload } from '@/types/csv-upload'
 import type { Season } from '@/types/season'
 
@@ -41,6 +42,7 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false)
   const [uploadToDelete, setUploadToDelete] = useState<CsvUpload | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const canUploadData = useCanUploadData()
 
   /**
    * Extract date from CSV filename
@@ -232,98 +234,100 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
       defaultExpanded={season.is_active}
     >
       <div className="space-y-6">
-        {/* Drag & Drop Upload Zone - Top Priority */}
-        <div className="space-y-4">
+        {/* Drag & Drop Upload Zone - Only for owners/collaborators */}
+        {canUploadData && (
+          <div className="space-y-4">
 
-          {/* Hidden File Input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+            {/* Hidden File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+              className="hidden"
+            />
 
-          {/* Drag & Drop Zone */}
-          <div
-            onClick={handleClickUpload}
-            onDragEnter={handleDragEnter}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`
-              relative flex flex-col items-center justify-center
-              px-6 py-8 rounded-lg border-2 border-dashed
-              transition-all duration-200 cursor-pointer
-              ${isDragging
-                ? 'border-primary bg-primary/5 scale-[1.02]'
-                : 'border-muted-foreground/25 bg-muted/20 hover:border-primary/50 hover:bg-muted/40'
-              }
-              ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
-          >
-            <FileUp className={`h-10 w-10 mb-3 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
-            <p className="text-sm font-medium mb-1">
-              {isDragging ? '放開以上傳檔案' : '點擊上傳或拖放 CSV 檔案'}
-            </p>
-            <p className="text-xs text-muted-foreground text-center">
-              檔名格式：同盟統計YYYY年MM月DD日HH时MM分SS秒.csv
-            </p>
-          </div>
+            {/* Drag & Drop Zone */}
+            <div
+              onClick={handleClickUpload}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`
+                relative flex flex-col items-center justify-center
+                px-6 py-8 rounded-lg border-2 border-dashed
+                transition-all duration-200 cursor-pointer
+                ${isDragging
+                  ? 'border-primary bg-primary/5 scale-[1.02]'
+                  : 'border-muted-foreground/25 bg-muted/20 hover:border-primary/50 hover:bg-muted/40'
+                }
+                ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+            >
+              <FileUp className={`h-10 w-10 mb-3 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
+              <p className="text-sm font-medium mb-1">
+                {isDragging ? '放開以上傳檔案' : '點擊上傳或拖放 CSV 檔案'}
+              </p>
+              <p className="text-xs text-muted-foreground text-center">
+                檔名格式：同盟統計YYYY年MM月DD日HH时MM分SS秒.csv
+              </p>
+            </div>
 
-          {/* Date Error */}
-          {dateError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{dateError}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* File Selected - Show Date Editor & Upload Button */}
-          {selectedFile && !dateError && parsedDate && (
-            <div className="space-y-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <Alert className="border-primary/30">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <AlertDescription className="text-sm font-medium">
-                  已選擇：{selectedFile.name}
-                </AlertDescription>
+            {/* Date Error */}
+            {dateError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{dateError}</AlertDescription>
               </Alert>
+            )}
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">快照日期</label>
-                <input
-                  type="date"
-                  value={snapshotDate}
-                  onChange={(e) => setSnapshotDate(e.target.value)}
-                  min={season.start_date}
-                  max={season.end_date || undefined}
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                />
-                <p className="text-xs text-muted-foreground">
-                  預設為檔名解析的日期，可自行調整
-                </p>
+            {/* File Selected - Show Date Editor & Upload Button */}
+            {selectedFile && !dateError && parsedDate && (
+              <div className="space-y-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <Alert className="border-primary/30">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-sm font-medium">
+                    已選擇：{selectedFile.name}
+                  </AlertDescription>
+                </Alert>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">快照日期</label>
+                  <input
+                    type="date"
+                    value={snapshotDate}
+                    onChange={(e) => setSnapshotDate(e.target.value)}
+                    min={season.start_date}
+                    max={season.end_date || undefined}
+                    className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    預設為檔名解析的日期，可自行調整
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleUpload}
+                  disabled={!selectedFile || isUploading}
+                  className="w-full"
+                  size="lg"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isUploading ? '上傳中...' : '確認上傳'}
+                </Button>
               </div>
+            )}
 
-              <Button
-                onClick={handleUpload}
-                disabled={!selectedFile || isUploading}
-                className="w-full"
-                size="lg"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {isUploading ? '上傳中...' : '確認上傳'}
-              </Button>
-            </div>
-          )}
-
-          {/* Upload Guidelines */}
-          {!selectedFile && (
-            <div className="text-xs text-muted-foreground space-y-1 px-1">
-              <p>📌 檔案日期必須在賽季範圍內（{new Date(season.start_date).toLocaleDateString('zh-TW')} - {season.end_date ? new Date(season.end_date).toLocaleDateString('zh-TW') : '進行中'}）</p>
-              <p>📌 同一天只能上傳一次，重複上傳會覆蓋舊資料</p>
-            </div>
-          )}
-        </div>
+            {/* Upload Guidelines */}
+            {!selectedFile && (
+              <div className="text-xs text-muted-foreground space-y-1 px-1">
+                <p>📌 檔案日期必須在賽季範圍內（{new Date(season.start_date).toLocaleDateString('zh-TW')} - {season.end_date ? new Date(season.end_date).toLocaleDateString('zh-TW') : '進行中'}）</p>
+                <p>📌 同一天只能上傳一次，重複上傳會覆蓋舊資料</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Uploads List - Sorted by Snapshot Date */}
         {uploads.length > 0 && (
@@ -390,15 +394,17 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
                         </p>
                       </div>
 
-                      {/* Right: Delete Button */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteClick(upload)}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {/* Right: Delete Button - Only for owners/collaborators */}
+                      {canUploadData && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteClick(upload)}
+                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   )
                 })}

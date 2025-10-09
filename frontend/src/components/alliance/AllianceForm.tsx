@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAlliance, useCreateAlliance, useUpdateAlliance } from '@/hooks/use-alliance'
+import { useCanUpdateAlliance } from '@/hooks/use-user-role'
 import { Button } from '@/components/ui/button'
 import { AllianceFormFields } from './AllianceFormFields'
 import {
@@ -14,6 +15,7 @@ export const AllianceForm: React.FC = () => {
   const { data: alliance, isLoading } = useAlliance()
   const createAlliance = useCreateAlliance()
   const updateAlliance = useUpdateAlliance()
+  const canUpdateAlliance = useCanUpdateAlliance()
 
   const [name, setName] = useState('')
   const [serverName, setServerName] = useState('')
@@ -87,7 +89,7 @@ export const AllianceForm: React.FC = () => {
             serverName={serverName}
             onNameChange={setName}
             onServerNameChange={setServerName}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !canUpdateAlliance}
             nameId={isEditing ? 'alliance-name-edit' : 'alliance-name-setup'}
             serverNameId={isEditing ? 'server-name-edit' : 'server-name-setup'}
           />
@@ -104,33 +106,35 @@ export const AllianceForm: React.FC = () => {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              type="submit"
-              disabled={mutation.isPending || !hasChanges || !name.trim()}
-              className="sm:min-w-[160px]"
-            >
-              {mutation.isPending
-                ? isEditing
-                  ? '更新中...'
-                  : '建立中...'
-                : isEditing
-                  ? '儲存變更'
-                  : '建立同盟'}
-            </Button>
-
-            {hasChanges && (
+          {canUpdateAlliance && (
+            <div className="flex flex-col sm:flex-row gap-3">
               <Button
-                type="button"
-                variant="outline"
-                onClick={handleReset}
-                disabled={mutation.isPending}
-                className="sm:min-w-[120px]"
+                type="submit"
+                disabled={mutation.isPending || !hasChanges || !name.trim()}
+                className="sm:min-w-[160px]"
               >
-                取消變更
+                {mutation.isPending
+                  ? isEditing
+                    ? '更新中...'
+                    : '建立中...'
+                  : isEditing
+                    ? '儲存變更'
+                    : '建立同盟'}
               </Button>
-            )}
-          </div>
+
+              {hasChanges && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleReset}
+                  disabled={mutation.isPending}
+                  className="sm:min-w-[120px]"
+                >
+                  取消變更
+                </Button>
+              )}
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>
