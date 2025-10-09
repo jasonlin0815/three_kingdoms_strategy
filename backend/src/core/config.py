@@ -1,0 +1,53 @@
+"""
+Application configuration
+
+符合 CLAUDE.md: Pydantic BaseSettings for environment variables
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables"""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Supabase Configuration
+    supabase_url: str
+    supabase_anon_key: str
+    supabase_service_key: str
+    supabase_jwt_secret: str
+
+    # Backend Configuration
+    backend_url: str = "http://localhost:8087"
+    frontend_url: str = "http://localhost:5187"
+    cors_origins: str = "http://localhost:5187"
+
+    # Security
+    secret_key: str
+
+    # Environment
+    environment: str = "development"
+    debug: bool = True
+
+    # Logging
+    log_level: str = "INFO"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from comma-separated string"""
+        return [origin.strip() for origin in self.cors_origins.split(",")]
+
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production environment"""
+        return self.environment == "production"
+
+
+# Global settings instance
+settings = Settings()

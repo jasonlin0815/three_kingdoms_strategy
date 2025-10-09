@@ -1,0 +1,242 @@
+"""
+CSV Upload Service
+
+符合 CLAUDE.md 🔴:
+- Service layer orchestrates repositories and business logic
+- NO direct database calls (delegates to repositories)
+- Implements complete CSV upload workflow
+"""
+
+from datetime import datetime
+from uuid import UUID
+
+from fastapi import HTTPException
+
+from src.repositories.alliance_repository import AllianceRepository
+from src.repositories.csv_upload_repository import CsvUploadRepository
+from src.repositories.member_repository import MemberRepository
+from src.repositories.member_snapshot_repository import MemberSnapshotRepository
+from src.repositories.season_repository import SeasonRepository
+from src.services.csv_parser_service import CSVParserService
+
+
+class CSVUploadService:
+    """Service for CSV upload orchestration"""
+
+    def __init__(self):
+        """Initialize CSV upload service with required repositories"""
+        self._csv_upload_repo = CsvUploadRepository()
+        self._member_repo = MemberRepository()
+        self._snapshot_repo = MemberSnapshotRepository()
+        self._season_repo = SeasonRepository()
+        self._alliance_repo = AllianceRepository()
+        self._parser = CSVParserService()
+
+    async def upload_csv(
+        self,
+        user_id: UUID,
+        season_id: UUID,
+        filename: str,
+        csv_content: str,
+        snapshot_date: datetime | None = None,
+    ) -> dict:
+        """
+        Complete CSV upload workflow
+
+        Args:
+            user_id: User UUID (for authorization)
+            season_id: Season UUID
+            filename: CSV filename
+            csv_content: CSV file content as string
+            snapshot_date: Optional override for snapshot date (defaults to filename parsing)
+
+        Returns:
+            Upload result with statistics
+
+        Raises:
+            HTTPException: If validation fails or user unauthorized
+
+        Workflow:
+            1. Validate user owns the season
+            2. Extract snapshot date from filename (if not provided)
+            3. Parse CSV content
+            4. Check for existing upload on same date (delete if exists)
+            5. Create CSV upload record
+            6. Upsert members
+            7. Batch create snapshots
+            8. Update member activity
+
+        符合 CLAUDE.md 🔴: Service layer orchestration
+        """
+        # Step 1: Validate user owns the season
+        season = await self._season_repo.get_by_id(season_id)
+        if not season:
+            raise HTTPException(status_code=404, detail="Season not found")
+
+        # Verify user owns the alliance
+        alliance = await self._alliance_repo.get_by_id(season.alliance_id)
+        if not alliance or alliance.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Unauthorized: You don't own this season")
+
+        # Step 2: Extract snapshot date from filename if not provided
+        if snapshot_date is None:
+            try:
+                snapshot_date = self._parser.extract_datetime_from_filename(filename)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+
+        # Step 3: Parse CSV content
+        try:
+            members_data = self._parser.parse_csv_content(csv_content)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to parse CSV content: {str(e)}"
+            ) from e
+
+        if not members_data:
+            raise HTTPException(status_code=400, detail="CSV file is empty")
+
+        # Step 4: Check for existing upload on same date
+        existing_upload = await self._csv_upload_repo.get_by_date(
+            alliance_id=alliance.id, season_id=season_id, snapshot_date=snapshot_date
+        )
+
+        if existing_upload:
+            # Delete existing upload (CASCADE will delete snapshots)
+            await self._csv_upload_repo.delete(existing_upload.id)
+
+        # Step 5: Create CSV upload record
+        upload_data = {
+            "season_id": str(season_id),
+            "alliance_id": str(alliance.id),
+            "snapshot_date": snapshot_date.isoformat(),
+            "file_name": filename,
+            "total_members": len(members_data),
+        }
+
+        csv_upload = await self._csv_upload_repo.create(upload_data)
+
+        # Step 6: Upsert members
+        member_ids_map = {}
+        for member_data in members_data:
+            member_name = member_data["member_name"]
+
+            # Upsert member (create if new, update if exists)
+            member = await self._member_repo.upsert_by_name(
+                alliance_id=alliance.id,
+                name=member_name,
+                member_data={
+                    "last_seen_at": snapshot_date.isoformat(),
+                    "is_active": True,
+                },
+            )
+
+            member_ids_map[member_name] = member.id
+
+        # Step 7: Batch create snapshots
+        snapshots_data = []
+        for member_data in members_data:
+            member_name = member_data["member_name"]
+            member_id = member_ids_map[member_name]
+
+            snapshot_data = {
+                "csv_upload_id": str(csv_upload.id),
+                "member_id": str(member_id),
+                "alliance_id": str(alliance.id),
+                "member_name": member_data["member_name"],
+                "contribution_rank": member_data["contribution_rank"],
+                "weekly_contribution": member_data["weekly_contribution"],
+                "weekly_merit": member_data["weekly_merit"],
+                "weekly_assist": member_data["weekly_assist"],
+                "weekly_donation": member_data["weekly_donation"],
+                "total_contribution": member_data["total_contribution"],
+                "total_merit": member_data["total_merit"],
+                "total_assist": member_data["total_assist"],
+                "total_donation": member_data["total_donation"],
+                "power_value": member_data["power_value"],
+                "state": member_data["state"],
+                "group_name": member_data["group_name"],
+            }
+
+            snapshots_data.append(snapshot_data)
+
+        snapshots = await self._snapshot_repo.create_batch(snapshots_data)
+
+        # Step 8: Return result
+        return {
+            "upload_id": csv_upload.id,
+            "season_id": season_id,
+            "alliance_id": alliance.id,
+            "snapshot_date": snapshot_date.isoformat(),
+            "filename": filename,
+            "total_members": len(members_data),
+            "total_snapshots": len(snapshots),
+            "replaced_existing": existing_upload is not None,
+        }
+
+    async def get_uploads_by_season(self, user_id: UUID, season_id: UUID) -> list[dict]:
+        """
+        Get all CSV uploads for a season
+
+        Args:
+            user_id: User UUID (for authorization)
+            season_id: Season UUID
+
+        Returns:
+            List of upload records
+
+        符合 CLAUDE.md 🔴: Service layer authorization
+        """
+        # Validate user owns the season
+        season = await self._season_repo.get_by_id(season_id)
+        if not season:
+            raise HTTPException(status_code=404, detail="Season not found")
+
+        alliance = await self._alliance_repo.get_by_id(season.alliance_id)
+        if not alliance or alliance.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+
+        uploads = await self._csv_upload_repo.get_by_season(season_id)
+
+        return [
+            {
+                "id": upload.id,
+                "season_id": upload.season_id,
+                "alliance_id": upload.alliance_id,
+                "snapshot_date": upload.snapshot_date.isoformat(),
+                "file_name": upload.file_name,
+                "total_members": upload.total_members,
+                "uploaded_at": upload.uploaded_at.isoformat(),
+            }
+            for upload in uploads
+        ]
+
+    async def delete_upload(self, user_id: UUID, upload_id: UUID) -> bool:
+        """
+        Delete a CSV upload (with cascading snapshots)
+
+        Args:
+            user_id: User UUID (for authorization)
+            upload_id: CSV upload UUID
+
+        Returns:
+            True if deleted successfully
+
+        符合 CLAUDE.md 🔴: Service layer authorization
+        """
+        # Get upload to verify ownership
+        upload = await self._csv_upload_repo.get_by_id(upload_id)
+        if not upload:
+            raise HTTPException(status_code=404, detail="Upload not found")
+
+        # Verify user owns the alliance
+        season = await self._season_repo.get_by_id(upload.season_id)
+        if not season:
+            raise HTTPException(status_code=404, detail="Season not found")
+
+        alliance = await self._alliance_repo.get_by_id(season.alliance_id)
+        if not alliance or alliance.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+
+        # Delete upload (CASCADE will delete snapshots)
+        return await self._csv_upload_repo.delete(upload_id)

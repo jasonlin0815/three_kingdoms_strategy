@@ -1,0 +1,46 @@
+"""
+CSV Upload Pydantic models
+
+符合 CLAUDE.md: snake_case naming, type hints, Google-style docstrings
+"""
+
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class CsvUploadBase(BaseModel):
+    """Base CSV upload model with common fields"""
+
+    snapshot_date: datetime = Field(
+        ..., description="Snapshot datetime parsed from filename"
+    )
+    file_name: str = Field(..., min_length=1, max_length=255, description="Original filename")
+    total_members: int = Field(0, ge=0, description="Total member count in this upload")
+
+
+class CsvUploadCreate(CsvUploadBase):
+    """CSV upload creation model"""
+
+    season_id: UUID = Field(..., description="Season ID")
+    alliance_id: UUID = Field(..., description="Alliance ID")
+
+
+class CsvUploadUpdate(BaseModel):
+    """CSV upload update model"""
+
+    total_members: int | None = Field(None, ge=0)
+
+
+class CsvUpload(CsvUploadBase):
+    """CSV upload model with all fields"""
+
+    id: UUID
+    season_id: UUID
+    alliance_id: UUID
+    uploaded_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
