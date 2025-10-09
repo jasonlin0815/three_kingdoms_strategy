@@ -43,7 +43,7 @@ function App() {
 
           {/* Protected Routes */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
@@ -52,6 +52,8 @@ function App() {
               </ProtectedRoute>
             }
           />
+          {/* Redirect root to dashboard */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route
             path="/seasons"
             element={

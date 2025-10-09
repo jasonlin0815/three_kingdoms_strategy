@@ -9,7 +9,7 @@ export function AuthCallback() {
     // Supabase will automatically handle the OAuth callback
     // We just need to wait for the auth state to update and redirect
     const timer = setTimeout(() => {
-      navigate('/')
+      navigate('/dashboard')
     }, 1000)
 
     return () => clearTimeout(timer)

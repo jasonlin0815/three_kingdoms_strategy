@@ -13,6 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 
 from src.core.auth import get_current_user_id
+from src.core.database import get_supabase_client
 from src.core.dependencies import get_alliance_collaborator_service
 from src.models.alliance_collaborator import (
     AllianceCollaboratorCreate,
@@ -39,16 +40,17 @@ async def add_alliance_collaborator(
     """
     Add a collaborator to alliance by email.
 
+    Now supports inviting users who haven't registered yet!
+
     Requirements:
-    - User must be registered in the system
     - Current user must be a collaborator of the alliance
-    - Email must not be duplicate
+    - If email is registered: Add user immediately
+    - If email not registered: Create pending invitation (auto-accept on registration)
 
     Returns:
-    - 201: Collaborator added successfully
+    - 201: Collaborator added successfully OR invitation created
     - 403: Not a collaborator of alliance
-    - 404: User email not found
-    - 409: User already a collaborator
+    - 409: User already a collaborator OR invitation already exists
 
     符合 CLAUDE.md 🔴: API layer delegates to service
     """
@@ -115,3 +117,43 @@ async def remove_alliance_collaborator(
     """
     await service.remove_collaborator(current_user_id, alliance_id, user_id)
     return None
+
+
+@router.post(
+    "/collaborators/process-invitations",
+    status_code=status.HTTP_200_OK,
+    summary="Process pending invitations for current user",
+)
+async def process_pending_invitations(
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)],
+    service: Annotated[
+        AllianceCollaboratorService, Depends(get_alliance_collaborator_service)
+    ],
+):
+    """
+    Process all pending invitations for the authenticated user.
+
+    Should be called after user login to automatically add them to
+    alliances they were invited to before registration.
+
+    Returns:
+    - 200: Number of invitations processed
+    - 401: Not authenticated
+
+    符合 CLAUDE.md 🔴: API layer delegates to service
+    """
+    # Get user email from Supabase Auth
+    supabase = get_supabase_client()
+    user = supabase.auth.admin.get_user_by_id(str(current_user_id))
+
+    if not user or not user.user.email:
+        return {"processed_count": 0, "message": "User email not found"}
+
+    processed_count = await service.process_pending_invitations(
+        current_user_id, user.user.email
+    )
+
+    return {
+        "processed_count": processed_count,
+        "message": f"Processed {processed_count} pending invitations",
+    }

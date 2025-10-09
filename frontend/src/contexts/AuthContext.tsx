@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
         // Update API client token when auth state changes
         apiClient.setAuthToken(session?.access_token ?? null)
 
@@ -48,6 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           session,
           loading: false
         })
+
+        // Process pending invitations on sign-in
+        if (event === 'SIGNED_IN' && session) {
+          try {
+            await apiClient.processPendingInvitations()
+          } catch {
+            // Don't block login if this fails
+          }
+        }
       }
     )
 

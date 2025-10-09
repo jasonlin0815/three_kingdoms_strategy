@@ -117,6 +117,16 @@ class ApiClient {
     await this.client.delete(`/api/v1/alliances/${allianceId}/collaborators/${userId}`)
   }
 
+  /**
+   * Process pending invitations for current user (after login)
+   */
+  async processPendingInvitations(): Promise<{ processed_count: number; message: string }> {
+    const response = await this.client.post<{ processed_count: number; message: string }>(
+      '/api/v1/collaborators/process-invitations'
+    )
+    return response.data
+  }
+
   // ==================== Season API ====================
 
   /**

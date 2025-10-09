@@ -6,14 +6,20 @@
 
 export interface AllianceCollaborator {
   readonly id: string
-  readonly alliance_id: string
-  readonly user_id: string
+  readonly alliance_id?: string
+  readonly user_id?: string
   readonly role: string
-  readonly invited_by: string | null
-  readonly joined_at: string
-  readonly created_at: string
+  readonly invited_by?: string | null
+  readonly joined_at?: string
+  readonly created_at?: string
   readonly user_email?: string
   readonly user_name?: string
+  // Pending invitation fields (when user not yet registered)
+  readonly invited_email?: string
+  readonly invited_at?: string
+  readonly status?: string
+  readonly is_pending_registration?: boolean
+  readonly message?: string
 }
 
 export interface AllianceCollaboratorCreate {

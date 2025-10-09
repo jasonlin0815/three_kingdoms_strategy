@@ -15,7 +15,7 @@ interface NavigationItem {
 const navigation: readonly NavigationItem[] = [
   {
     name: '總覽',
-    href: '/',
+    href: '/dashboard',
     icon: LayoutDashboard,
   },
   {
@@ -54,8 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   const location = useLocation()
 
   const isActive = (href: string) => {
-    if (href === '/') {
-      return location.pathname === '/'
+    if (href === '/dashboard') {
+      return location.pathname === '/dashboard'
     }
     return location.pathname.startsWith(href)
   }
@@ -64,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     <div className={cn('flex h-full w-64 flex-col bg-card border-r border-border', className)}>
       {/* Logo Section */}
       <div className="flex h-16 items-center px-6 border-b border-border">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to="/dashboard" className="flex items-center gap-2">
           <img
             src="/assets/logo.png"
             alt="三國志戰略版"

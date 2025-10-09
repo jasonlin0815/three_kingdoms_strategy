@@ -39,17 +39,48 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
     setErrorMessage(null)
 
     try {
-      await addCollaborator.mutateAsync({
+      const result = await addCollaborator.mutateAsync({
         allianceId,
         data: { email }
       })
+
       setEmail('')
-      setSuccessMessage(`已成功新增 ${email} 到同盟`)
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '請稍後再試'
-      setErrorMessage(`新增失敗: ${message}`)
+
+      // Check if this is a pending invitation or immediate add
+      if (result.is_pending_registration) {
+        setSuccessMessage(
+          `✉️ 已發送邀請給 ${email}。使用者註冊後將自動加入同盟。`
+        )
+      } else {
+        setSuccessMessage(`✅ 已成功新增 ${email} 到同盟`)
+      }
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000)
+    } catch (error: unknown) {
+      // Handle different error types
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status: number; data?: { detail?: string } } }
+
+        if (axiosError.response?.status === 409) {
+          const detail = axiosError.response.data?.detail || ''
+          if (detail.includes('already sent')) {
+            setErrorMessage(`⏳ 已經邀請過 ${email}，等待該使用者註冊中...`)
+          } else if (detail.includes('already a collaborator')) {
+            setErrorMessage(`ℹ️ ${email} 已經是同盟成員了`)
+          } else {
+            setErrorMessage(`⚠️ ${detail}`)
+          }
+        } else if (axiosError.response?.status === 403) {
+          setErrorMessage('❌ 您沒有權限邀請成員')
+        } else {
+          const detail = axiosError.response?.data?.detail || '請稍後再試'
+          setErrorMessage(`新增失敗: ${detail}`)
+        }
+      } else {
+        const message = error instanceof Error ? error.message : '請稍後再試'
+        setErrorMessage(`新增失敗: ${message}`)
+      }
     }
   }
 
@@ -128,18 +159,23 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
                       {collaborator.user_email || collaborator.user_id}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {collaborator.role === 'owner' ? '👑 擁有者' : '👤 成員'} · 加入於{' '}
-                      {new Date(collaborator.joined_at).toLocaleDateString('zh-TW')}
+                      {collaborator.role === 'owner' ? '👑 擁有者' : '👤 成員'}
+                      {collaborator.joined_at && (
+                        <>
+                          {' · 加入於 '}
+                          {new Date(collaborator.joined_at).toLocaleDateString('zh-TW')}
+                        </>
+                      )}
                     </p>
                   </div>
 
-                  {collaborator.role !== 'owner' && (
+                  {collaborator.role !== 'owner' && collaborator.user_id && (
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={() =>
                         handleRemoveCollaborator(
-                          collaborator.user_id,
+                          collaborator.user_id!,
                           collaborator.user_email || 'Unknown'
                         )
                       }
