@@ -9,10 +9,19 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, TrendingUp, Users, Award, Target } from 'lucide-react'
+import { AlertCircle, TrendingUp, Users, Target, Loader2, Award } from 'lucide-react'
 import { useAlliance } from '@/hooks/use-alliance'
+import { useSeasons } from '@/hooks/use-seasons'
+import { useHegemonyScoresPreview } from '@/hooks/use-hegemony-weights'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 // Chart imports
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
@@ -27,7 +36,7 @@ import {
 // Types
 // ============================================================================
 
-interface MemberRankingData {
+interface ChartMemberData {
   readonly member_name: string
   readonly total_score: number
   readonly rank: number
@@ -48,91 +57,131 @@ const memberRankingChartConfig = {
 } satisfies ChartConfig
 
 // ============================================================================
-// Mock Data (Replace with real API calls)
+// Helper Functions
 // ============================================================================
 
-const mockMemberRankingData: MemberRankingData[] = [
-  { member_name: '大地英豪', total_score: 850000, rank: 1 },
-  { member_name: '委皇叔', total_score: 820000, rank: 2 },
-  { member_name: '風雲戰將', total_score: 780000, rank: 3 },
-  { member_name: '蜀漢軍師', total_score: 750000, rank: 4 },
-  { member_name: '江東猛虎', total_score: 720000, rank: 5 },
-  { member_name: '中原勇士', total_score: 690000, rank: 6 },
-  { member_name: '北疆統帥', total_score: 660000, rank: 7 },
-  { member_name: '西涼戰神', total_score: 630000, rank: 8 },
-  { member_name: '南蠻霸主', total_score: 600000, rank: 9 },
-  { member_name: '東吳智者', total_score: 580000, rank: 10 },
-  { member_name: '荊州刺史', total_score: 560000, rank: 11 },
-  { member_name: '幽州勇士', total_score: 540000, rank: 12 },
-  { member_name: '并州戰將', total_score: 520000, rank: 13 },
-  { member_name: '青州豪傑', total_score: 500000, rank: 14 },
-  { member_name: '徐州守將', total_score: 480000, rank: 15 },
-  { member_name: '揚州水師', total_score: 460000, rank: 16 },
-  { member_name: '益州智囊', total_score: 440000, rank: 17 },
-  { member_name: '涼州鐵騎', total_score: 420000, rank: 18 },
-  { member_name: '冀州謀士', total_score: 400000, rank: 19 },
-  { member_name: '兗州精兵', total_score: 380000, rank: 20 },
-]
+/**
+ * Format hegemony score for display
+ */
+function formatScore(score: number): string {
+  if (score >= 1000000) {
+    return `${(score / 1000000).toFixed(1)}M`
+  }
+  if (score >= 1000) {
+    return `${(score / 1000).toFixed(0)}K`
+  }
+  return score.toFixed(0)
+}
 
 // ============================================================================
 // Hegemony Score Tab Component
 // ============================================================================
 
-const HegemonyScoreTab: React.FC = () => {
+interface HegemonyScoreTabProps {
+  readonly seasonId: string | null
+}
+
+const HegemonyScoreTab: React.FC<HegemonyScoreTabProps> = ({ seasonId }) => {
+  // State for display limit
+  const [displayLimit, setDisplayLimit] = useState<number>(20)
+
+  // Fetch hegemony scores with dynamic limit
+  const { data: scoresData, isLoading, error } = useHegemonyScoresPreview(seasonId, displayLimit)
+
+  // Transform API data to chart format
+  const chartData: ChartMemberData[] = React.useMemo(() => {
+    if (!scoresData) return []
+
+    return scoresData.map(score => ({
+      member_name: score.member_name,
+      total_score: score.final_score,
+      rank: score.rank
+    }))
+  }, [scoresData])
+
+  // Calculate dynamic chart height based on number of members
+  const totalMembers = chartData.length
+  const chartHeight = Math.max(400, totalMembers * 40) // 40px per member, minimum 400px
+
+  // Calculate X-axis domain: max value = top score + 10%
+  const maxScore = chartData[0]?.total_score || 0
+  const xAxisMax = Math.ceil(maxScore * 1.1)
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-muted-foreground">載入霸業分數數據中...</span>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Alert className="border-red-500/50 bg-red-50 dark:bg-red-950/20">
+        <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+        <AlertDescription className="text-red-900 dark:text-red-100">
+          <strong className="font-semibold">載入失敗</strong>
+          <p className="mt-1 text-sm text-red-800 dark:text-red-200">
+            無法載入霸業分數數據。請確保已上傳 CSV 數據並初始化權重配置。
+          </p>
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  // Empty state
+  if (!chartData || chartData.length === 0) {
+    return (
+      <Alert className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+        <AlertDescription className="text-yellow-900 dark:text-yellow-100">
+          <strong className="font-semibold">尚無數據</strong>
+          <p className="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
+            請先上傳 CSV 數據並初始化霸業權重配置。
+          </p>
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Summary Info */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">總成員數</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">201</div>
-            <p className="text-xs text-muted-foreground">
-              顯示前 20 名成員排名
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">最高分數</CardTitle>
-            <Award className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">850K</div>
-            <p className="text-xs text-muted-foreground">
-              第一名：大地英豪
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">平均分數</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">615K</div>
-            <p className="text-xs text-muted-foreground">
-              前 20 名平均
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Member Ranking Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>成員霸業分數排行榜</CardTitle>
-          <CardDescription>
-            根據加權計算後的霸業分數排序（從高到低）
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>成員霸業分數排行榜</CardTitle>
+              <CardDescription>
+                根據加權計算後的霸業分數排序（從高到低）
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">顯示：</span>
+              <Select
+                value={displayLimit.toString()}
+                onValueChange={(value) => setDisplayLimit(Number(value))}
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">前 10 名</SelectItem>
+                  <SelectItem value="20">前 20 名</SelectItem>
+                  <SelectItem value="30">前 30 名</SelectItem>
+                  <SelectItem value="50">前 50 名</SelectItem>
+                  <SelectItem value="100">前 100 名</SelectItem>
+                  <SelectItem value="200">全部成員</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="h-[800px] w-full">
+          <div className="w-full" style={{ height: `${chartHeight}px` }}>
             <style>{`
               .custom-chart .recharts-cartesian-grid-horizontal line,
               .custom-chart .recharts-cartesian-grid-vertical line {
@@ -148,7 +197,7 @@ const HegemonyScoreTab: React.FC = () => {
             <ChartContainer config={memberRankingChartConfig} className="h-full w-full custom-chart">
               <BarChart
                 accessibilityLayer
-                data={mockMemberRankingData}
+                data={chartData}
                 layout="vertical"
                 margin={{
                   left: 80,
@@ -174,7 +223,8 @@ const HegemonyScoreTab: React.FC = () => {
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
-                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                  tickFormatter={(value) => formatScore(value)}
+                  domain={[0, xAxisMax]}
                 />
                 <ChartTooltip
                   cursor={false}
@@ -200,7 +250,13 @@ const HegemonyScoreTab: React.FC = () => {
 
 const AllianceAnalytics: React.FC = () => {
   const { data: alliance, isLoading } = useAlliance()
+  const { data: seasons } = useSeasons(false)
   const [activeTab, setActiveTab] = useState('hegemony')
+
+  // Get active season
+  const activeSeason = React.useMemo(() => {
+    return seasons?.find(s => s.is_active) || seasons?.[0] || null
+  }, [seasons])
 
   // Show setup prompt if no alliance
   if (!isLoading && !alliance) {
@@ -283,7 +339,7 @@ const AllianceAnalytics: React.FC = () => {
         </TabsList>
 
         <TabsContent value="hegemony" className="space-y-6">
-          <HegemonyScoreTab />
+          <HegemonyScoreTab seasonId={activeSeason?.id || null} />
         </TabsContent>
 
         <TabsContent value="contribution" className="space-y-6">

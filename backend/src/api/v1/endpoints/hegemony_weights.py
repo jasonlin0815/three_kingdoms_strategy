@@ -176,7 +176,7 @@ async def delete_weight(
 @router.get("/preview", response_model=list[HegemonyScorePreview])
 async def preview_hegemony_scores(
     season_id: UUID = Query(..., description="Season UUID"),
-    limit: int = Query(default=10, ge=1, le=100, description="Top N members to return"),
+    limit: int = Query(default=20, ge=1, le=500, description="Top N members to return"),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -188,6 +188,8 @@ async def preview_hegemony_scores(
     Calculation:
     1. For each snapshot: score = Σ(indicator × tier1_weight)
     2. Final score: Σ(snapshot_score × tier2_weight)
+
+    Note: Maximum limit is 500 members for performance reasons.
     """
     service = HegemonyWeightService()
 

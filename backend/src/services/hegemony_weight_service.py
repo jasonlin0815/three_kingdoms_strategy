@@ -246,7 +246,7 @@ class HegemonyWeightService:
         return await self._weight_repo.delete(weight_id)
 
     async def calculate_hegemony_scores(
-        self, user_id: UUID, season_id: UUID, limit: int = 10
+        self, user_id: UUID, season_id: UUID, limit: int = 20
     ) -> list[HegemonyScorePreview]:
         """
         Calculate hegemony scores for top members in a season.
@@ -265,6 +265,8 @@ class HegemonyWeightService:
 
         Returns:
             List of HegemonyScorePreview objects sorted by final score (descending)
+
+        Performance: Optimized to avoid N+1 queries by fetching all snapshots at once
         """
         _, alliance = await self._verify_season_access(user_id, season_id)
 
@@ -273,21 +275,37 @@ class HegemonyWeightService:
         if not weights:
             raise ValueError("No weight configurations found. Please initialize weights first.")
 
-        # Get all members in the alliance
-        members = await self._member_repo.get_by_alliance(alliance.id)
+        # Get all CSV upload IDs
+        csv_upload_ids = [w.csv_upload_id for w in weights]
+
+        # Batch fetch all snapshots for performance optimization
+        all_snapshots = []
+        for upload_id in csv_upload_ids:
+            snapshots = await self._snapshot_repo.get_by_upload(upload_id)
+            all_snapshots.extend(snapshots)
+
+        # Group snapshots by member_id for O(1) lookup
+        # Structure: {member_id: {csv_upload_id: snapshot}}
+        from src.models.member_snapshot import MemberSnapshot
+        snapshots_by_member: dict[UUID, dict[UUID, MemberSnapshot]] = {}
+        member_names: dict[UUID, str] = {}
+
+        for snapshot in all_snapshots:
+            if snapshot.member_id not in snapshots_by_member:
+                snapshots_by_member[snapshot.member_id] = {}
+                member_names[snapshot.member_id] = snapshot.member_name
+
+            snapshots_by_member[snapshot.member_id][snapshot.csv_upload_id] = snapshot
 
         # Calculate scores for each member
-        member_scores: dict[UUID, dict] = {}
+        member_scores: list[dict] = []
 
-        for member in members:
+        for member_id, member_snapshots in snapshots_by_member.items():
             member_final_score = Decimal("0")
             snapshot_scores = {}
 
             for weight_config in weights:
-                # Get member's snapshot for this CSV upload
-                snapshot = await self._snapshot_repo.get_by_member_and_upload(
-                    member.id, weight_config.csv_upload_id
-                )
+                snapshot = member_snapshots.get(weight_config.csv_upload_id)
 
                 if snapshot is None:
                     # Member has no data for this snapshot, score = 0
@@ -309,21 +327,19 @@ class HegemonyWeightService:
                 # Apply tier 2 weight
                 member_final_score += snapshot_score * weight_config.snapshot_weight
 
-            member_scores[member.id] = {
-                "member_id": member.id,
-                "member_name": member.name,
+            member_scores.append({
+                "member_id": member_id,
+                "member_name": member_names[member_id],
                 "final_score": member_final_score,
                 "snapshot_scores": snapshot_scores,
-            }
+            })
 
         # Sort by final score (descending) and assign ranks
-        sorted_members = sorted(
-            member_scores.values(), key=lambda x: x["final_score"], reverse=True
-        )
+        member_scores.sort(key=lambda x: x["final_score"], reverse=True)
 
         # Build preview results
         previews = []
-        for rank, member_data in enumerate(sorted_members[:limit], start=1):
+        for rank, member_data in enumerate(member_scores[:limit], start=1):
             previews.append(
                 HegemonyScorePreview(
                     member_id=member_data["member_id"],
