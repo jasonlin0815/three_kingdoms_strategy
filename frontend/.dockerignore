@@ -7,7 +7,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-package-lock.json
+# package-lock.json is needed for npm ci
 
 # Build output (會在 Dockerfile 中重新生成)
 dist/
