@@ -371,8 +371,8 @@ class HegemonyWeightService:
                         + Decimal(str(snapshot.total_donation or 0)) * weight_config.weight_donation
                     )
 
-                # Store snapshot score
-                date_key = weight_config.snapshot_date.strftime("%Y-%m-%d %H:%M:%S")
+                # Store snapshot score (date only, no time to avoid timezone issues)
+                date_key = weight_config.snapshot_date.strftime("%Y-%m-%d")
                 snapshot_scores[date_key] = snapshot_score
 
                 # Apply tier 2 weight

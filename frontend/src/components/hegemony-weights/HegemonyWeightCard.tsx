@@ -9,13 +9,21 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { Scale, Save, Loader2, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
+import { Scale, Save, Loader2, AlertCircle, CheckCircle2, RotateCcw, RefreshCw } from 'lucide-react'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useCanManageWeights } from '@/hooks/use-user-role'
 import type { Season } from '@/types/season'
 import {
@@ -24,6 +32,17 @@ import {
   useBatchUpdateHegemonyWeights,
   useHegemonyScoresPreview
 } from '@/hooks/use-hegemony-weights'
+
+// Chart imports
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart'
 
 interface HegemonyWeightCardProps {
   readonly season: Season
@@ -42,11 +61,78 @@ interface LocalWeight {
   readonly snapshot_weight: number
 }
 
+interface ChartMemberData {
+  readonly member_name: string
+  readonly total_score: number
+  readonly rank: number
+  // Dynamic snapshot score fields will be added at runtime
+  [key: string]: string | number
+}
+
+/**
+ * Format date to YYYY-MM-DD using UTC to avoid timezone issues
+ */
+function formatDateUTC(date: string): string {
+  const d = new Date(date)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Generate color with opacity based on index
+ * Uses primary color with varying opacity for different snapshots
+ */
+function generateSnapshotColor(index: number, total: number): string {
+  // Base primary color in oklch format
+  const baseColor = 'oklch(0.6487 0.1538 150.3071)'
+
+  // Calculate opacity: from 0.3 (oldest) to 1.0 (newest)
+  const opacity = 0.3 + (0.7 * index / (total - 1 || 1))
+
+  // Extract oklch values and add alpha channel
+  const match = baseColor.match(/oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/)
+  if (!match) return baseColor
+
+  const [, l, c, h] = match
+  return `oklch(${l} ${c} ${h} / ${opacity.toFixed(2)})`
+}
+
+/**
+ * Build dynamic chart config based on snapshot dates
+ */
+function buildChartConfig(snapshotDates: string[]): ChartConfig {
+  const config: ChartConfig = {}
+
+  snapshotDates.forEach((date, index) => {
+    const snapshotKey = `snapshot_${index}`
+    config[snapshotKey] = {
+      label: formatDateUTC(date),
+      color: generateSnapshotColor(index, snapshotDates.length)
+    }
+  })
+
+  return config
+}
+
+/**
+ * Format hegemony score for display
+ */
+function formatScore(score: number): string {
+  if (score >= 1000000) {
+    return `${(score / 1000000).toFixed(1)}M`
+  }
+  if (score >= 1000) {
+    return `${(score / 1000).toFixed(0)}K`
+  }
+  return score.toFixed(0)
+}
+
 export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }) => {
   const [localWeights, setLocalWeights] = useState<LocalWeight[]>([])
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
+  const [activeTab, setActiveTab] = useState<'config' | 'preview'>('config')
   const [hasAttemptedInit, setHasAttemptedInit] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'loading' | 'success'>('idle')
+  const [previewLimit, setPreviewLimit] = useState<number>(20)
   const canManageWeights = useCanManageWeights()
 
   // Fetch weights for this season
@@ -56,35 +142,42 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
   const initializeMutation = useInitializeHegemonyWeights()
   const batchUpdateMutation = useBatchUpdateHegemonyWeights()
 
-  // Preview scores (only fetch when preview is shown)
+  // Preview scores (fetch when preview tab is active)
   const {
     data: previewScores,
     isLoading: isLoadingPreview,
     refetch: refetchPreview
-  } = useHegemonyScoresPreview(showPreview ? season.id : null, 10)
+  } = useHegemonyScoresPreview(activeTab === 'preview' ? season.id : null, previewLimit)
+
+  /**
+   * Convert server weights to local state format
+   */
+  const syncWeightsToLocal = useCallback((serverWeights: typeof weights) => {
+    if (!serverWeights || serverWeights.length === 0) return []
+
+    return serverWeights.map((w) => ({
+      id: w.id,
+      csv_upload_id: w.csv_upload_id,
+      snapshot_date: w.snapshot_date,
+      snapshot_filename: w.snapshot_filename,
+      total_members: w.total_members,
+      weight_contribution: Number(w.weight_contribution),
+      weight_merit: Number(w.weight_merit),
+      weight_assist: Number(w.weight_assist),
+      weight_donation: Number(w.weight_donation),
+      snapshot_weight: Number(w.snapshot_weight)
+    }))
+  }, [])
 
   /**
    * Sync server weights to local state
    */
   useEffect(() => {
     if (weights && weights.length > 0) {
-      setLocalWeights(
-        weights.map((w) => ({
-          id: w.id,
-          csv_upload_id: w.csv_upload_id,
-          snapshot_date: w.snapshot_date,
-          snapshot_filename: w.snapshot_filename,
-          total_members: w.total_members,
-          weight_contribution: Number(w.weight_contribution),
-          weight_merit: Number(w.weight_merit),
-          weight_assist: Number(w.weight_assist),
-          weight_donation: Number(w.weight_donation),
-          snapshot_weight: Number(w.snapshot_weight)
-        }))
-      )
+      setLocalWeights(syncWeightsToLocal(weights))
       setHasUnsavedChanges(false)
     }
-  }, [weights])
+  }, [weights, syncWeightsToLocal])
 
   /**
    * Auto-initialize weights if not exists (only once)
@@ -160,38 +253,52 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
   }, [localWeights.length])
 
   /**
-   * Save all changes
+   * Save all changes with status animation
    */
   const handleSave = useCallback(async () => {
-    const updates = localWeights.map((w) => ({
-      weightId: w.id,
-      data: {
-        weight_contribution: w.weight_contribution,
-        weight_merit: w.weight_merit,
-        weight_assist: w.weight_assist,
-        weight_donation: w.weight_donation,
-        snapshot_weight: w.snapshot_weight
+    setSaveStatus('loading')
+
+    try {
+      const updates = localWeights.map((w) => ({
+        weightId: w.id,
+        data: {
+          weight_contribution: w.weight_contribution,
+          weight_merit: w.weight_merit,
+          weight_assist: w.weight_assist,
+          weight_donation: w.weight_donation,
+          snapshot_weight: w.snapshot_weight
+        }
+      }))
+
+      await batchUpdateMutation.mutateAsync({
+        seasonId: season.id,
+        updates
+      })
+
+      setHasUnsavedChanges(false)
+      setSaveStatus('success')
+
+      // Reset status after 2 seconds
+      setTimeout(() => {
+        setSaveStatus('idle')
+      }, 2000)
+
+      // Refresh preview if active tab is preview
+      if (activeTab === 'preview') {
+        await refetchPreview()
       }
-    }))
-
-    await batchUpdateMutation.mutateAsync({
-      seasonId: season.id,
-      updates
-    })
-    setHasUnsavedChanges(false)
-
-    // Refresh preview if shown
-    if (showPreview) {
-      await refetchPreview()
+    } catch {
+      setSaveStatus('idle')
     }
-  }, [localWeights, season.id, batchUpdateMutation, showPreview, refetchPreview])
+  }, [localWeights, season.id, batchUpdateMutation, activeTab, refetchPreview])
 
   /**
-   * Toggle preview
+   * Discard changes (reset to server state)
    */
-  const handleTogglePreview = useCallback(() => {
-    setShowPreview((prev) => !prev)
-  }, [])
+  const handleDiscardChanges = useCallback(() => {
+    setLocalWeights(syncWeightsToLocal(weights))
+    setHasUnsavedChanges(false)
+  }, [weights, syncWeightsToLocal])
 
   /**
    * Validate Tier 1 weights (each snapshot's indicator weights should sum to 100% as integers)
@@ -223,6 +330,65 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
   const allValid = useMemo(() => {
     return tier1ValidStatus.every((v) => v) && tier2ValidStatus
   }, [tier1ValidStatus, tier2ValidStatus])
+
+  /**
+   * Extract snapshot dates from weights (sorted chronologically)
+   */
+  const snapshotDates = useMemo(() => {
+    if (!weights || weights.length === 0) return []
+
+    return [...weights]
+      .sort((a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime())
+      .map(w => w.snapshot_date)
+  }, [weights])
+
+  /**
+   * Transform preview scores to chart data with snapshot breakdown
+   */
+  const chartData: ChartMemberData[] = useMemo(() => {
+    if (!previewScores || !snapshotDates || snapshotDates.length === 0) return []
+
+    return previewScores.map(score => {
+      const memberData: ChartMemberData = {
+        member_name: score.member_name,
+        total_score: Number(score.final_score),
+        rank: score.rank
+      }
+
+      // Add each snapshot's score as a separate field
+      // Backend returns snapshot_scores with keys in format: "YYYY-MM-DD"
+      snapshotDates.forEach((date, index) => {
+        const snapshotKey = `snapshot_${index}`
+        const snapshotScore = score.snapshot_scores[formatDateUTC(date)] || 0
+        memberData[snapshotKey] = Number(snapshotScore)
+      })
+
+      return memberData
+    })
+  }, [previewScores, snapshotDates])
+
+  /**
+   * Build dynamic chart config based on snapshot dates
+   */
+  const chartConfig = useMemo(() => {
+    return buildChartConfig(snapshotDates)
+  }, [snapshotDates])
+
+  /**
+   * Calculate dynamic chart height based on number of members
+   */
+  const chartHeight = useMemo(() => {
+    const totalMembers = chartData.length
+    return Math.max(400, totalMembers * 40) // 40px per member, minimum 400px
+  }, [chartData.length])
+
+  /**
+   * Calculate X-axis domain: max value = top score + 10%
+   */
+  const xAxisMax = useMemo(() => {
+    const maxScore = chartData[0]?.total_score || 0
+    return Math.ceil(maxScore * 1.1)
+  }, [chartData])
 
   const icon = <Scale className="h-4 w-4" />
 
@@ -282,11 +448,20 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
           </div>
         )}
 
-        {/* Weights Configuration */}
+        {/* Weights Configuration with Tabs */}
         {!isLoadingWeights && localWeights.length > 0 && (
-          <div className="space-y-4">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'config' | 'preview')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="config">權重配置</TabsTrigger>
+              <TabsTrigger value="preview" disabled={!allValid}>
+                排名預覽
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab 1: Weight Configuration */}
+            <TabsContent value="config" className="space-y-4 mt-4">
             {/* Validation Summary */}
-            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border bg-muted/30">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">快照權重總和：</span>
                 <Badge variant={tier2ValidStatus ? 'default' : 'destructive'} className="font-mono">
@@ -298,6 +473,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                 variant="outline"
                 onClick={handleDistributeEvenly}
                 disabled={!canManageWeights}
+                className="w-full sm:w-auto"
               >
                 平均分配快照權重
               </Button>
@@ -318,26 +494,32 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                       key={weight.id}
                       className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                     >
-                      {/* Single Row Layout */}
-                      <div className="flex items-center gap-4">
-                        {/* Left: Date & Info */}
-                        <div className="min-w-[180px]">
-                          <p className="text-sm font-medium">
-                            {new Date(weight.snapshot_date).toLocaleString('zh-TW', {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit'
-                            })}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {weight.total_members} 名成員
-                          </p>
-                        </div>
+                      {/* Responsive Layout:
+                          Mobile (<640px): Full vertical stack
+                          Tablet (640-1279px): Date + Indicators in row, Slider in separate row
+                          Desktop (≥1280px): Everything in one row
+                      */}
+                      <div className="flex flex-col xl:flex-row xl:items-center gap-4">
+                        {/* Top Row: Date + Indicators (flex on tablet+, stack on mobile) */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 xl:flex-1">
+                          {/* Date & Info */}
+                          <div className="sm:min-w-[160px] xl:min-w-[180px]">
+                            <p className="text-sm font-medium">
+                              {new Date(weight.snapshot_date).toLocaleString('zh-TW', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
+                              })}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {weight.total_members} 名成員
+                            </p>
+                          </div>
 
-                        {/* Middle: 4 Indicator Weights */}
-                        <div className="flex items-center gap-2 flex-1">
+                          {/* Indicator Weights - Grid on mobile, flex on tablet+ */}
+                          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:flex-1">
                           {/* Contribution */}
-                          <div className="flex items-center gap-1 flex-1">
+                          <div className="flex items-center gap-1">
                             <Label className="text-xs text-muted-foreground whitespace-nowrap">貢獻</Label>
                             <input
                               key={`${weight.id}-contribution-${weight.weight_contribution}`}
@@ -356,13 +538,13 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                 }
                               }}
                               disabled={!canManageWeights}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-14 sm:w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
 
                           {/* Merit */}
-                          <div className="flex items-center gap-1 flex-1">
+                          <div className="flex items-center gap-1">
                             <Label className="text-xs text-muted-foreground whitespace-nowrap">戰功</Label>
                             <input
                               key={`${weight.id}-merit-${weight.weight_merit}`}
@@ -381,13 +563,13 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                 }
                               }}
                               disabled={!canManageWeights}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-14 sm:w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
 
                           {/* Assist */}
-                          <div className="flex items-center gap-1 flex-1">
+                          <div className="flex items-center gap-1">
                             <Label className="text-xs text-muted-foreground whitespace-nowrap">助攻</Label>
                             <input
                               key={`${weight.id}-assist-${weight.weight_assist}`}
@@ -406,13 +588,13 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                 }
                               }}
                               disabled={!canManageWeights}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-14 sm:w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
 
                           {/* Donation */}
-                          <div className="flex items-center gap-1 flex-1">
+                          <div className="flex items-center gap-1">
                             <Label className="text-xs text-muted-foreground whitespace-nowrap">捐獻</Label>
                             <input
                               key={`${weight.id}-donation-${weight.weight_donation}`}
@@ -431,15 +613,16 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                 }
                               }}
                               disabled={!canManageWeights}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-14 sm:w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
                         </div>
+                        </div>
 
-                        {/* Right: Snapshot Weight Slider + Input */}
-                        <div className="flex items-center gap-3 min-w-[280px]">
-                          <div className="flex-1">
+                        {/* Bottom Row: Snapshot Weight Slider + Input (full width on tablet, fixed width on desktop) */}
+                        <div className="flex items-center gap-3 xl:min-w-[300px]">
+                          <div className="flex-1 min-w-[100px]">
                             <Slider
                               value={[weight.snapshot_weight * 100]}
                               onValueChange={canManageWeights ? ([value]) => handleTier2Change(originalIndex, value / 100) : undefined}
@@ -469,7 +652,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                                 }
                               }}
                               disabled={!canManageWeights}
-                              className="w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-14 sm:w-16 h-8 px-2 text-sm rounded-md border border-input bg-background text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="text-xs text-muted-foreground">%</span>
                           </div>
@@ -485,94 +668,199 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
                 })}
             </div>
 
-            {/* Action Buttons - Only for owners/collaborators */}
-            {canManageWeights && (
-              <div className="flex items-center gap-3 pt-4">
-              <Button
-                onClick={handleSave}
-                disabled={!hasUnsavedChanges || !allValid || batchUpdateMutation.isPending}
-                className="flex-1"
-              >
-                {batchUpdateMutation.isPending && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
-                <Save className="h-4 w-4 mr-2" />
-                儲存所有變更
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleTogglePreview}
-                disabled={!allValid}
-              >
-                {showPreview ? (
-                  <>
-                    <EyeOff className="h-4 w-4 mr-2" />
-                    隱藏預覽
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    預覽排名
-                  </>
-                )}
-              </Button>
-              </div>
-            )}
+              {/* Action Bar - Config Tab - Only visible for owners/collaborators */}
+              {canManageWeights && (
+                <div className="sticky bottom-0 -mx-6 -mb-6 mt-6 p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Left: Status Information */}
+                    <div className="flex items-center gap-2 text-sm">
+                      {hasUnsavedChanges ? (
+                        <>
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span className="text-muted-foreground">
+                            有未儲存的變更
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <span className="text-muted-foreground">已同步</span>
+                        </>
+                      )}
+                    </div>
 
-            {/* Validation Warning - Only for owners/collaborators */}
-            {canManageWeights && !allValid && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  所有權重配置必須有效（各層總和為 100%）才能儲存或預覽
-                </AlertDescription>
-              </Alert>
-            )}
+                    {/* Right: Action Buttons */}
+                    <div className="flex items-center gap-2">
+                      {hasUnsavedChanges && (
+                        <Button
+                          variant="ghost"
+                          onClick={handleDiscardChanges}
+                          className="h-9"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          捨棄變更
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleSave}
+                        disabled={!hasUnsavedChanges || !allValid || saveStatus === 'loading'}
+                        className="h-9"
+                      >
+                        {saveStatus === 'loading' && (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        )}
+                        {saveStatus === 'success' && (
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                        )}
+                        {saveStatus === 'idle' && (
+                          <Save className="h-4 w-4 mr-2" />
+                        )}
+                        {saveStatus === 'loading' && '儲存中...'}
+                        {saveStatus === 'success' && '已儲存'}
+                        {saveStatus === 'idle' && '儲存所有變更'}
+                      </Button>
+                    </div>
+                  </div>
 
-            {/* Preview Section - Available for all roles */}
-            {showPreview && canManageWeights && (
-              <div className="space-y-4 pt-6 border-t">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold">霸業排名預覽（Top 10）</h4>
-                  {isLoadingPreview && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  {/* Validation Warning */}
+                  {!allValid && hasUnsavedChanges && (
+                    <Alert variant="destructive" className="mt-3">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        所有權重配置必須有效（各層總和為 100%）才能儲存
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </div>
+              )}
+            </TabsContent>
 
-                {previewScores && previewScores.length > 0 && (
-                  <div className="space-y-2">
-                    {previewScores.map((score) => (
-                      <div
-                        key={score.member_id}
-                        className="flex items-center gap-4 p-3 rounded-lg border bg-card"
-                      >
-                        <Badge
-                          variant={score.rank <= 3 ? 'default' : 'outline'}
-                          className="w-8 h-8 flex items-center justify-center font-bold"
+            {/* Tab 2: Ranking Preview */}
+            <TabsContent value="preview" className="space-y-4 mt-4">
+              {/* Loading State */}
+              {isLoadingPreview && (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2 text-muted-foreground">載入霸業分數數據中...</span>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!isLoadingPreview && (!chartData || chartData.length === 0) && (
+                <Alert className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <AlertDescription className="text-yellow-900 dark:text-yellow-100">
+                    <strong className="font-semibold">尚無數據</strong>
+                    <p className="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
+                      請先上傳 CSV 數據。如已上傳，請切換回「權重配置」頁籤儲存變更後再查看預覽。
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Chart */}
+              {!isLoadingPreview && chartData && chartData.length > 0 && (
+                <div className="space-y-4">
+                  {/* Chart Header with Controls */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">成員霸業分數排行榜</h3>
+                      <p className="text-sm text-muted-foreground">
+                        根據加權計算後的霸業分數排序（從高到低）
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">顯示：</span>
+                        <Select
+                          value={previewLimit.toString()}
+                          onValueChange={(value) => setPreviewLimit(Number(value))}
                         >
-                          {score.rank}
-                        </Badge>
-                        <div className="flex-1">
-                          <p className="font-medium">{score.member_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            總分：{Number(score.final_score).toLocaleString('zh-TW', {
-                              maximumFractionDigits: 2
-                            })}
-                          </p>
-                        </div>
+                          <SelectTrigger className="w-[120px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="10">前 10 名</SelectItem>
+                            <SelectItem value="20">前 20 名</SelectItem>
+                            <SelectItem value="30">前 30 名</SelectItem>
+                            <SelectItem value="50">前 50 名</SelectItem>
+                            <SelectItem value="100">前 100 名</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchPreview()}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        重新整理
+                      </Button>
+                    </div>
                   </div>
-                )}
 
-                {previewScores && previewScores.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    沒有可預覽的成員數據
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+                  {/* Stacked Bar Chart */}
+                  <div className="w-full rounded-lg border bg-card p-6" style={{ height: `${chartHeight + 80}px` }}>
+                    <ChartContainer config={chartConfig} className="h-full w-full">
+                      <BarChart
+                        accessibilityLayer
+                        data={chartData}
+                        layout="vertical"
+                        margin={{
+                          left: 80,
+                          right: 40,
+                          top: 20,
+                          bottom: 60,
+                        }}
+                      >
+                        <CartesianGrid
+                          horizontal={false}
+                          strokeDasharray="3 3"
+                        />
+                        <YAxis
+                          dataKey="member_name"
+                          type="category"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={10}
+                          width={75}
+                        />
+                        <XAxis
+                          type="number"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={8}
+                          tickFormatter={(value) => formatScore(value)}
+                          domain={[0, xAxisMax]}
+                        />
+                        <ChartTooltip
+                          cursor={false}
+                          content={<ChartTooltipContent />}
+                        />
+                        <ChartLegend
+                          content={<ChartLegendContent />}
+                          verticalAlign="bottom"
+                        />
+                        {/* Dynamically render Bar components for each snapshot */}
+                        {snapshotDates.map((_, index) => {
+                          const snapshotKey = `snapshot_${index}`
+                          return (
+                            <Bar
+                              key={snapshotKey}
+                              dataKey={snapshotKey}
+                              fill={`var(--color-${snapshotKey})`}
+                              stackId="a"
+                              radius={index === snapshotDates.length - 1 ? [0, 4, 4, 0] : 0}
+                            />
+                          )
+                        })}
+                      </BarChart>
+                    </ChartContainer>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </CollapsibleCard>
