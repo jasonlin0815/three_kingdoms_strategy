@@ -58,9 +58,14 @@ class AllianceCollaboratorResponse(BaseModel):
     joined_at: datetime
     created_at: datetime
 
-    # User info (from JOIN with auth.users)
+    # User info (enriched from Supabase Auth)
     user_email: str | None = None
-    user_name: str | None = None
+    user_name: str | None = None  # Deprecated, use user_full_name
+    user_full_name: str | None = None  # From Google OAuth (full_name or name)
+    user_avatar_url: str | None = None  # From Google OAuth (avatar_url or picture)
+
+    class Config:
+        extra = "allow"  # Allow additional fields from service
 
 
 class AllianceCollaboratorListResponse(BaseModel):

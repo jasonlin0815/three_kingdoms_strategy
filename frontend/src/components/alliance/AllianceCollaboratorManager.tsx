@@ -12,6 +12,7 @@ import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -141,6 +142,19 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
     }
   }
 
+  const getRoleBadgeVariant = (role: string): 'default' | 'secondary' | 'outline' => {
+    switch (role) {
+      case 'owner':
+        return 'default'
+      case 'collaborator':
+        return 'secondary'
+      case 'member':
+        return 'outline'
+      default:
+        return 'outline'
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -186,15 +200,23 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
           <h4 className="font-medium">目前成員 ({collaboratorsData?.total ?? 0})</h4>
 
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">載入中...</p>
+            <div className="flex items-center justify-center py-8">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span>載入成員資料中...</span>
+              </div>
+            </div>
           ) : collaboratorsData?.collaborators.length === 0 ? (
-            <p className="text-sm text-muted-foreground">尚無成員</p>
+            <div className="flex flex-col items-center justify-center py-8 text-center border rounded-lg bg-muted/50">
+              <p className="text-muted-foreground">尚無協作成員</p>
+              <p className="text-sm text-muted-foreground mt-1">使用上方表單邀請成員加入同盟</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {collaboratorsData?.collaborators.map((collaborator) => (
                 <div
                   key={collaborator.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {/* User Avatar */}
@@ -216,29 +238,36 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
                     )}
 
                     <div className="flex-1 min-w-0">
+                      {/* Display Name (priority: full_name > email > user_id) */}
                       <p className="font-medium truncate">
-                        {collaborator.user_full_name || collaborator.user_email || collaborator.user_id}
+                        {collaborator.user_full_name ||
+                          collaborator.user_email ||
+                          `使用者 ${collaborator.user_id?.slice(0, 8)}...`}
                       </p>
-                      <p className="text-sm text-muted-foreground truncate">
+
+                      {/* Secondary Info (email if name exists, join date) */}
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground truncate">
                         {collaborator.user_full_name && collaborator.user_email && (
-                          <>{collaborator.user_email}</>
-                        )}
-                        {collaborator.joined_at && (
                           <>
-                            {' · 加入於 '}
-                            {new Date(collaborator.joined_at).toLocaleDateString('zh-TW')}
+                            <span className="truncate">{collaborator.user_email}</span>
+                            {collaborator.joined_at && <span>·</span>}
                           </>
                         )}
-                      </p>
+                        {collaborator.joined_at && (
+                          <span className="whitespace-nowrap">
+                            加入於 {new Date(collaborator.joined_at).toLocaleDateString('zh-TW')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     {/* Role Selector - Only for owners and non-owner users */}
                     {collaborator.role === 'owner' ? (
-                      <div className="px-3 py-1.5 text-sm font-medium">
+                      <Badge variant={getRoleBadgeVariant(collaborator.role)} className="font-medium">
                         {getRoleLabel(collaborator.role)}
-                      </div>
+                      </Badge>
                     ) : canManageCollaborators && collaborator.user_id ? (
                       <Select
                         value={collaborator.role}
@@ -260,9 +289,9 @@ export const AllianceCollaboratorManager: React.FC<AllianceCollaboratorManagerPr
                         </SelectContent>
                       </Select>
                     ) : (
-                      <div className="px-3 py-1.5 text-sm">
+                      <Badge variant={getRoleBadgeVariant(collaborator.role)} className="font-medium">
                         {getRoleLabel(collaborator.role)}
-                      </div>
+                      </Badge>
                     )}
 
                     {/* Remove Button - Only for non-owners */}

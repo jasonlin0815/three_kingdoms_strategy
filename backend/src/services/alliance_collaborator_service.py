@@ -415,13 +415,37 @@ class AllianceCollaboratorService:
 
                 try:
                     user_response = self._supabase.auth.admin.get_user_by_id(str(user_id))
-                    user = user_response.user if user_response else None
+
+                    # Handle different response formats from Supabase Auth
+                    user = None
+                    if hasattr(user_response, 'user'):
+                        user = user_response.user
+                    elif isinstance(user_response, dict) and 'user' in user_response:
+                        user = user_response['user']
+                    else:
+                        user = user_response
 
                     if user:
-                        collab["user_email"] = user.email
-                        if user.user_metadata:
-                            collab["user_full_name"] = user.user_metadata.get("full_name")
-                            collab["user_avatar_url"] = user.user_metadata.get("avatar_url")
+                        # Extract email
+                        email = getattr(user, 'email', None) if hasattr(user, 'email') else user.get('email')
+                        if email:
+                            collab["user_email"] = email
+
+                        # Extract user metadata (full_name, avatar_url)
+                        user_metadata = None
+                        if hasattr(user, 'user_metadata'):
+                            user_metadata = user.user_metadata
+                        elif isinstance(user, dict) and 'user_metadata' in user:
+                            user_metadata = user['user_metadata']
+
+                        if user_metadata and isinstance(user_metadata, dict):
+                            full_name = user_metadata.get("full_name") or user_metadata.get("name")
+                            avatar_url = user_metadata.get("avatar_url") or user_metadata.get("picture")
+
+                            if full_name:
+                                collab["user_full_name"] = full_name
+                            if avatar_url:
+                                collab["user_avatar_url"] = avatar_url
 
                 except Exception as e:
                     logger.warning(f"Failed to fetch user metadata for {user_id}: {e}")
