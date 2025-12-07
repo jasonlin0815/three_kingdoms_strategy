@@ -1121,9 +1121,10 @@ function ContributionDistributionTab({ groupStats, members, periodTrends }: Cont
 
 interface MembersTabProps {
   readonly members: readonly GroupMember[]
+  readonly viewMode: ViewMode
 }
 
-function MembersTab({ members }: MembersTabProps) {
+function MembersTab({ members, viewMode }: MembersTabProps) {
   const [sortBy, setSortBy] = useState<'rank' | 'merit' | 'assist'>('rank')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
@@ -1184,14 +1185,18 @@ function MembersTab({ members }: MembersTabProps) {
                   >
                     貢獻排名 {sortBy === 'rank' && (sortDir === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-right py-2 px-2 font-medium text-muted-foreground">變化</th>
+                  {viewMode === 'latest' && (
+                    <th className="text-right py-2 px-2 font-medium text-muted-foreground">變化</th>
+                  )}
                   <th
                     className="text-right py-2 px-2 font-medium cursor-pointer hover:text-primary"
                     onClick={() => handleSort('merit')}
                   >
                     日均戰功 {sortBy === 'merit' && (sortDir === 'desc' ? '↓' : '↑')}
                   </th>
-                  <th className="text-right py-2 px-2 font-medium text-muted-foreground">變化</th>
+                  {viewMode === 'latest' && (
+                    <th className="text-right py-2 px-2 font-medium text-muted-foreground">變化</th>
+                  )}
                   <th
                     className="text-right py-2 px-2 font-medium cursor-pointer hover:text-primary"
                     onClick={() => handleSort('assist')}
@@ -1208,23 +1213,27 @@ function MembersTab({ members }: MembersTabProps) {
                       {formatNumberCompact(member.power)}
                     </td>
                     <td className="py-2 px-2 text-right tabular-nums">#{member.contribution_rank}</td>
-                    <td className="py-2 px-2">
-                      <div className="flex justify-end">
-                        <RankChangeIndicator change={member.rank_change} showNewLabel={false} size="sm" />
-                      </div>
-                    </td>
+                    {viewMode === 'latest' && (
+                      <td className="py-2 px-2">
+                        <div className="flex justify-end">
+                          <RankChangeIndicator change={member.rank_change} showNewLabel={false} size="sm" />
+                        </div>
+                      </td>
+                    )}
                     <td className="py-2 px-2 text-right tabular-nums">{formatNumber(member.daily_merit)}</td>
-                    <td className="py-2 px-2 text-right text-xs tabular-nums">
-                      {member.merit_change === null ? (
-                        <span className="text-muted-foreground">新</span>
-                      ) : member.merit_change > 0 ? (
-                        <span className="text-primary">+{formatNumberCompact(member.merit_change)}</span>
-                      ) : member.merit_change < 0 ? (
-                        <span className="text-destructive">{formatNumberCompact(member.merit_change)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
+                    {viewMode === 'latest' && (
+                      <td className="py-2 px-2 text-right text-xs tabular-nums">
+                        {member.merit_change === null ? (
+                          <span className="text-muted-foreground">新</span>
+                        ) : member.merit_change > 0 ? (
+                          <span className="text-primary">+{formatNumberCompact(member.merit_change)}</span>
+                        ) : member.merit_change < 0 ? (
+                          <span className="text-destructive">{formatNumberCompact(member.merit_change)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-2 px-2 text-right tabular-nums">{Math.round(member.daily_assist)}</td>
                   </tr>
                 ))}
@@ -1408,7 +1417,7 @@ function GroupAnalytics() {
             </TabsContent>
 
             <TabsContent value="members">
-              <MembersTab members={groupMembers} />
+              <MembersTab members={groupMembers} viewMode={viewMode} />
             </TabsContent>
           </Tabs>
         ) : null}
