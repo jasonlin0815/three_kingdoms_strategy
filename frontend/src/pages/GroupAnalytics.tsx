@@ -115,17 +115,17 @@ const meritTrendConfig = {
   },
 } satisfies ChartConfig
 
-const rankTrendConfig = {
-  rank: {
-    label: '平均排名',
-    color: 'var(--primary)',
+const contributionDistributionConfig = {
+  count: {
+    label: '人數',
+    color: 'var(--chart-3)',
   },
 } satisfies ChartConfig
 
-const rankDistributionConfig = {
-  count: {
-    label: '人數',
-    color: 'var(--primary)',
+const contributionTrendConfig = {
+  contribution: {
+    label: '人日均貢獻',
+    color: 'var(--chart-3)',
   },
 } satisfies ChartConfig
 
@@ -794,111 +794,263 @@ function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistri
 }
 
 // ============================================================================
-// Tab 3: Contribution Rank
+// Tab 3: Contribution Distribution
 // ============================================================================
 
-interface ContributionRankTabProps {
-  readonly groupStats: GroupStats
-  readonly periodTrends: readonly GroupTrendItem[]
-  readonly members: readonly GroupMember[]
+interface ContributionBin {
+  readonly range: string
+  readonly label: string
+  readonly min: number
+  readonly max: number
+  readonly count: number
+  readonly percentage: number
 }
 
-function ContributionRankTab({ groupStats, periodTrends, members }: ContributionRankTabProps) {
+interface ContributionDistributionTabProps {
+  readonly groupStats: GroupStats
+  readonly members: readonly GroupMember[]
+  readonly periodTrends: readonly GroupTrendItem[]
+}
+
+function ContributionDistributionTab({ groupStats, members, periodTrends }: ContributionDistributionTabProps) {
+  const [hoveredMember, setHoveredMember] = useState<GroupMember | null>(null)
+
   // Expand periods to daily data for date-based X-axis
   const dailyData = useMemo(
     () =>
       expandPeriodsToDaily(periodTrends, (p) => ({
         avgRank: p.avg_rank,
+        avgContribution: p.avg_contribution,
         avgMerit: p.avg_merit,
-        avgAssist: p.avg_assist,
       })),
     [periodTrends]
   )
   const xAxisTicks = useMemo(() => getPeriodBoundaryTicks(periodTrends), [periodTrends])
 
-  // Calculate rank improvement
-  const rankImprovement =
-    periodTrends.length >= 2 ? periodTrends[0].avg_rank - periodTrends[periodTrends.length - 1].avg_rank : 0
+  // Calculate dynamic contribution distribution bins
+  const contributionBins = useMemo((): ContributionBin[] => {
+    if (members.length === 0) return []
 
-  // Rank distribution histogram
-  const rankDistribution = useMemo(() => {
-    const bins = [
-      { range: '1-50', min: 1, max: 50, count: 0 },
-      { range: '51-100', min: 51, max: 100, count: 0 },
-      { range: '101-150', min: 101, max: 150, count: 0 },
-      { range: '151-200', min: 151, max: 200, count: 0 },
-    ]
+    const contributions = members.map((m) => m.daily_contribution)
+    const maxContribution = Math.max(...contributions, 0)
+
+    // All members are inactive (0 contribution)
+    if (maxContribution === 0) {
+      return [{ range: '0', label: '0', min: 0, max: Infinity, count: members.length, percentage: 100 }]
+    }
+
+    // Select a "nice" step size that produces 5-8 bins
+    // Prefer round numbers in 萬 (10000) units for readability
+    const selectStep = (max: number): number => {
+      const niceSteps = [5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000]
+      const targetBins = 6
+
+      // Find step that produces closest to target bin count
+      for (const step of niceSteps) {
+        const binCount = Math.ceil(max / step)
+        if (binCount >= 4 && binCount <= 8) return step
+      }
+
+      // Fallback: calculate based on magnitude
+      const rawStep = max / targetBins
+      const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)))
+      const normalized = rawStep / magnitude
+      const niceNormalized = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+      return niceNormalized * magnitude
+    }
+
+    const step = selectStep(maxContribution)
+    const numRanges = Math.ceil(maxContribution / step)
+
+    // Format number as 萬 for readability
+    const formatWan = (v: number): string => {
+      if (v === 0) return '0'
+      if (v >= 10000) {
+        const wan = v / 10000
+        return Number.isInteger(wan) ? `${wan}萬` : `${wan.toFixed(1)}萬`
+      }
+      return v.toLocaleString()
+    }
+
+    // Build bin definitions: first bin is always "0" (inactive members)
+    type BinDef = { min: number; max: number; label: string }
+    const binDefs: BinDef[] = [{ min: 0, max: 0.01, label: '0' }]
+
+    for (let i = 0; i < numRanges; i++) {
+      const rangeMin = i * step + (i === 0 ? 0.01 : 0)
+      const rangeMax = (i + 1) * step
+      const isLast = i === numRanges - 1
+
+      let label: string
+      if (i === 0) {
+        label = `0-${formatWan(step)}`
+      } else if (isLast) {
+        label = `${formatWan(i * step)}+`
+      } else {
+        label = `${formatWan(i * step)}-${formatWan(rangeMax)}`
+      }
+
+      binDefs.push({
+        min: rangeMin,
+        max: isLast ? Infinity : rangeMax,
+        label,
+      })
+    }
+
+    // Count members in each bin (single pass for O(n) performance)
+    const total = members.length
+    const counts = new Array<number>(binDefs.length).fill(0)
 
     for (const member of members) {
-      for (const bin of bins) {
-        if (member.contribution_rank >= bin.min && member.contribution_rank <= bin.max) {
-          bin.count++
+      const contribution = member.daily_contribution
+      for (let i = 0; i < binDefs.length; i++) {
+        if (contribution >= binDefs[i].min && contribution < binDefs[i].max) {
+          counts[i]++
           break
         }
       }
     }
 
-    return bins
+    return binDefs.map((def, i) => ({
+      range: def.label,
+      label: def.label,
+      min: def.min,
+      max: def.max,
+      count: counts[i],
+      percentage: total > 0 ? Math.round((counts[i] / total) * 100) : 0,
+    }))
   }, [members])
+
+  // Calculate position for strip plot (handle edge case when min === max)
+  const getStripPosition = (contribution: number): number => {
+    const range = groupStats.contribution_max - groupStats.contribution_min
+    if (range === 0) return 50
+    return ((contribution - groupStats.contribution_min) / range) * 100
+  }
 
   return (
     <div className="space-y-6">
-      {/* Rank Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="lg:col-span-2 border-primary/50">
-          <CardHeader className="pb-2">
-            <CardDescription>組別平均貢獻排名</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-bold tabular-nums">#{Math.round(groupStats.avg_rank)}</span>
+      {/* Box Plot with Strip Plot */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">貢獻分佈概覽</CardTitle>
+          <CardDescription>
+            箱型圖統計 · 每個圓點代表一位成員
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {/* Top labels */}
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>{formatNumber(groupStats.contribution_min)}</span>
+              <span>{formatNumber(groupStats.contribution_median)}</span>
+              <span>{formatNumber(groupStats.contribution_max)}</span>
             </div>
-            <div className="flex items-center gap-4 mt-2">
-              <div className="flex items-center gap-1">
-                {rankImprovement >= 0 ? (
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-destructive" />
-                )}
-                <span className={`text-sm ${rankImprovement >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                  {rankImprovement >= 0 ? '+' : ''}
-                  {Math.round(rankImprovement)} 名 本賽季
-                </span>
-              </div>
+
+            {/* Box Plot */}
+            <div className="relative h-8">
+              {/* Full range bar */}
+              <div className="absolute inset-y-2 left-0 right-0 bg-muted rounded" />
+              {/* IQR box */}
+              <div
+                className="absolute inset-y-1 bg-chart-3/30 border-2 border-chart-3 rounded"
+                style={{
+                  left: `${getStripPosition(groupStats.contribution_q1)}%`,
+                  right: `${100 - getStripPosition(groupStats.contribution_q3)}%`,
+                }}
+              />
+              {/* Median line */}
+              <div
+                className="absolute inset-y-0 w-0.5 bg-chart-3"
+                style={{ left: `${getStripPosition(groupStats.contribution_median)}%` }}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>最佳排名</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums text-primary">#{groupStats.best_rank}</div>
-            <p className="text-xs text-muted-foreground mt-1">組內最高成員</p>
-          </CardContent>
-        </Card>
+            {/* Strip Plot - Individual member data points */}
+            <div className="relative h-6">
+              {members.map((member) => {
+                const position = getStripPosition(member.daily_contribution)
+                const isHovered = hoveredMember?.id === member.id
+                return (
+                  <div
+                    key={member.id}
+                    className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-chart-3/70 hover:bg-chart-3 hover:scale-150 cursor-pointer transition-transform z-10"
+                    style={{ left: `calc(${position}% - 5px)` }}
+                    onMouseEnter={() => setHoveredMember(member)}
+                    onMouseLeave={() => setHoveredMember(null)}
+                  >
+                    {isHovered && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded bg-popover border shadow-md text-xs whitespace-nowrap z-20">
+                        <div className="font-medium">{member.name}</div>
+                        <div className="text-muted-foreground">
+                          日均貢獻: {formatNumber(member.daily_contribution)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>最差排名</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums text-destructive">#{groupStats.worst_rank}</div>
-            <p className="text-xs text-muted-foreground mt-1">組內最低成員</p>
-          </CardContent>
-        </Card>
-      </div>
+            {/* Bottom labels */}
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Min</span>
+              <span>Q1: {formatNumber(groupStats.contribution_q1)}</span>
+              <span>Q3: {formatNumber(groupStats.contribution_q3)}</span>
+              <span>Max</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Rank Trend Chart */}
+        {/* Contribution Distribution by Range */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">排名趨勢</CardTitle>
-            <CardDescription>組別平均貢獻排名變化（數字越小排名越好）</CardDescription>
+            <CardTitle className="text-base">貢獻區間分佈</CardTitle>
+            <CardDescription>成員日均貢獻區間人數分佈</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={rankTrendConfig} className="h-[250px] w-full">
+            <ChartContainer config={contributionDistributionConfig} className="h-[220px] w-full">
+              <BarChart data={contributionBins} margin={{ left: 10, right: 10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  className="text-xs"
+                  angle={-30}
+                  textAnchor="end"
+                  height={50}
+                  interval={0}
+                />
+                <YAxis tickLine={false} axisLine={false} className="text-xs" />
+                <ChartTooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload as ContributionBin
+                    return (
+                      <div className="rounded-lg border bg-background p-2 shadow-sm">
+                        <div className="font-medium">日均貢獻: {data.label}</div>
+                        <div className="text-sm">人數: {data.count} ({data.percentage}%)</div>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="count" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Contribution Trend */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">貢獻趨勢</CardTitle>
+            <CardDescription>組別人日均貢獻變化</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={contributionTrendConfig} className="h-[220px] w-full">
               <LineChart data={dailyData} margin={{ left: 12, right: 12 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
@@ -913,9 +1065,7 @@ function ContributionRankTab({ groupStats, periodTrends, members }: Contribution
                   tickLine={false}
                   axisLine={false}
                   className="text-xs"
-                  reversed
-                  domain={['dataMin - 5', 'dataMax + 5']}
-                  tickFormatter={(value) => `#${value}`}
+                  tickFormatter={(value) => formatNumberCompact(value)}
                 />
                 <ChartTooltip
                   content={({ active, payload }) => {
@@ -924,16 +1074,17 @@ function ContributionRankTab({ groupStats, periodTrends, members }: Contribution
                     return (
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
                         <div className="font-medium">{data.dateLabel}</div>
-                        <div className="text-sm">平均排名: #{Math.round(data.avgRank)}</div>
+                        <div className="text-sm">人日均貢獻: {formatNumber(data.avgContribution)}</div>
                       </div>
                     )
                   }}
                 />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Line
                   type="stepAfter"
-                  dataKey="avgRank"
-                  name="平均排名"
-                  stroke="var(--primary)"
+                  dataKey="avgContribution"
+                  name="人日均貢獻"
+                  stroke="var(--chart-3)"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 5 }}
@@ -942,87 +1093,7 @@ function ContributionRankTab({ groupStats, periodTrends, members }: Contribution
             </ChartContainer>
           </CardContent>
         </Card>
-
-        {/* Rank Distribution Histogram */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">排名分佈</CardTitle>
-            <CardDescription>組內成員在全盟排名的分佈</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={rankDistributionConfig} className="h-[250px] w-full">
-              <BarChart data={rankDistribution} margin={{ left: 20, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="range" tickLine={false} axisLine={false} className="text-xs" />
-                <YAxis tickLine={false} axisLine={false} className="text-xs" />
-                <ChartTooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0].payload as (typeof rankDistribution)[0]
-                    return (
-                      <div className="rounded-lg border bg-background p-2 shadow-sm">
-                        <div className="font-medium">排名 {data.range}</div>
-                        <div className="text-sm">{data.count} 人</div>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
       </div>
-
-      {/* Period Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">期間明細</CardTitle>
-          <CardDescription>貢獻排名是官方綜合指標，反映成員整體表現</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-2 font-medium">期間</th>
-                  <th className="text-right py-2 px-2 font-medium">平均排名</th>
-                  <th className="text-right py-2 px-2 font-medium">變化</th>
-                  <th className="text-right py-2 px-2 font-medium">人日均戰功</th>
-                  <th className="text-right py-2 px-2 font-medium">人日均助攻</th>
-                  <th className="text-right py-2 px-2 font-medium">成員數</th>
-                </tr>
-              </thead>
-              <tbody>
-                {periodTrends.map((d, index) => {
-                  const prevRank = index > 0 ? periodTrends[index - 1].avg_rank : null
-                  const rankChange = prevRank ? prevRank - d.avg_rank : null
-
-                  return (
-                    <tr key={d.period_number} className="border-b last:border-0">
-                      <td className="py-2 px-2 text-muted-foreground">{d.period_label}</td>
-                      <td className="py-2 px-2 text-right tabular-nums font-medium">#{Math.round(d.avg_rank)}</td>
-                      <td className="py-2 px-2 text-right">
-                        {rankChange !== null ? (
-                          <span className={rankChange >= 0 ? 'text-primary' : 'text-destructive'}>
-                            {rankChange >= 0 ? '+' : ''}
-                            {Math.round(rankChange)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 text-right tabular-nums">{formatNumber(d.avg_merit)}</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{Math.round(d.avg_assist)}</td>
-                      <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{d.member_count}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }
@@ -1283,9 +1354,9 @@ function GroupAnalytics() {
                 <BarChart3 className="h-4 w-4" />
                 <span className="hidden sm:inline">戰功分佈</span>
               </TabsTrigger>
-              <TabsTrigger value="rank" className="flex items-center gap-2">
+              <TabsTrigger value="contribution" className="flex items-center gap-2">
                 <Trophy className="h-4 w-4" />
-                <span className="hidden sm:inline">貢獻排名</span>
+                <span className="hidden sm:inline">貢獻分佈</span>
               </TabsTrigger>
               <TabsTrigger value="members" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -1311,11 +1382,11 @@ function GroupAnalytics() {
               />
             </TabsContent>
 
-            <TabsContent value="rank">
-              <ContributionRankTab
+            <TabsContent value="contribution">
+              <ContributionDistributionTab
                 groupStats={groupStats}
-                periodTrends={periodTrends}
                 members={groupMembers}
+                periodTrends={periodTrends}
               />
             </TabsContent>
 

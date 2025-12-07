@@ -449,6 +449,7 @@ class AnalyticsService:
             "avg_daily_merit": round(total_merit / total_days, 2) if total_days > 0 else 0,
             "avg_daily_assist": round(total_assist / total_days, 2) if total_days > 0 else 0,
             "avg_daily_donation": round(total_donation / total_days, 2) if total_days > 0 else 0,
+            "avg_power": round(sum(p["end_power"] for p in trend) / len(trend), 2) if trend else 0,
             # Rank info
             "current_rank": latest["end_rank"],
             "rank_change_season": (first["start_rank"] - latest["end_rank"]) if first["start_rank"] else None,
@@ -573,6 +574,7 @@ class AnalyticsService:
             if period:
                 count = len(metrics)
                 ranks = [m["end_rank"] for m in metrics]
+                contributions = [float(Decimal(str(m["daily_contribution"]))) for m in metrics]
                 merits = [float(Decimal(str(m["daily_merit"]))) for m in metrics]
                 assists = [float(Decimal(str(m["daily_assist"]))) for m in metrics]
                 donations = [float(Decimal(str(m["daily_donation"]))) for m in metrics]
@@ -585,6 +587,7 @@ class AnalyticsService:
                     "end_date": period.end_date.isoformat(),
                     "days": period.days,
                     "avg_rank": round(sum(ranks) / count, 1),
+                    "avg_contribution": round(sum(contributions) / count, 2),
                     "avg_merit": round(sum(merits) / count, 2),
                     "avg_assist": round(sum(assists) / count, 2),
                     "avg_donation": round(sum(donations) / count, 2),
@@ -614,18 +617,21 @@ class AnalyticsService:
 
                 if member_history:
                     # Calculate weighted averages across all periods
+                    total_contribution = sum(float(Decimal(str(h["daily_contribution"]))) for h in member_history)
                     total_merit = sum(float(Decimal(str(h["daily_merit"]))) for h in member_history)
                     total_assist = sum(float(Decimal(str(h["daily_assist"]))) for h in member_history)
                     total_donation = sum(float(Decimal(str(h["daily_donation"]))) for h in member_history)
                     total_rank = sum(h["end_rank"] for h in member_history)
                     period_count = len(member_history)
 
+                    avg_contribution = round(total_contribution / period_count, 2)
                     avg_merit = round(total_merit / period_count, 2)
                     avg_assist = round(total_assist / period_count, 2)
                     avg_donation = round(total_donation / period_count, 2)
                     avg_rank = round(total_rank / period_count, 1)
                 else:
                     # Fallback to latest period data
+                    avg_contribution = float(Decimal(str(m["daily_contribution"])))
                     avg_merit = float(Decimal(str(m["daily_merit"])))
                     avg_assist = float(Decimal(str(m["daily_assist"])))
                     avg_donation = float(Decimal(str(m["daily_donation"])))
@@ -635,11 +641,13 @@ class AnalyticsService:
                     "id": member_id,
                     "name": m["member_name"],
                     "contribution_rank": round(avg_rank),  # Season average rank
+                    "daily_contribution": avg_contribution,
                     "daily_merit": avg_merit,
                     "daily_assist": avg_assist,
                     "daily_donation": avg_donation,
                     "power": m["end_power"],  # Power is always latest
                     "rank_change": None,  # Not applicable for season view
+                    "contribution_change": None,  # Not applicable for season view
                     "merit_change": None,  # Not applicable for season view
                 })
 
@@ -654,9 +662,9 @@ class AnalyticsService:
             }
 
         # Default: latest period view
-        # Get previous period metrics for merit_change calculation
+        # Get previous period metrics for change calculation
         # Use current member_ids to find their previous metrics (regardless of their old group)
-        prev_merit_map: dict[str, float] = {}
+        prev_metrics_map: dict[str, dict] = {}
         if len(periods) >= 2:
             prev_period = periods[-2]
             current_member_ids = [str(m["member_id"]) for m in group_metrics]
@@ -664,25 +672,32 @@ class AnalyticsService:
                 current_member_ids, [str(prev_period.id)]
             )
             for pm in prev_metrics:
-                prev_merit_map[str(pm["member_id"])] = float(Decimal(str(pm["daily_merit"])))
+                prev_metrics_map[str(pm["member_id"])] = {
+                    "daily_contribution": float(Decimal(str(pm["daily_contribution"]))),
+                    "daily_merit": float(Decimal(str(pm["daily_merit"]))),
+                }
 
         # Build members list for latest period
         members = []
         for m in group_metrics:
             member_id = str(m["member_id"])
+            current_contribution = float(Decimal(str(m["daily_contribution"])))
             current_merit = float(Decimal(str(m["daily_merit"])))
-            prev_merit = prev_merit_map.get(member_id)
-            merit_change = round(current_merit - prev_merit, 2) if prev_merit is not None else None
+            prev_data = prev_metrics_map.get(member_id)
+            contribution_change = round(current_contribution - prev_data["daily_contribution"], 2) if prev_data else None
+            merit_change = round(current_merit - prev_data["daily_merit"], 2) if prev_data else None
 
             members.append({
                 "id": member_id,
                 "name": m["member_name"],
                 "contribution_rank": m["end_rank"],
+                "daily_contribution": current_contribution,
                 "daily_merit": current_merit,
                 "daily_assist": float(Decimal(str(m["daily_assist"]))),
                 "daily_donation": float(Decimal(str(m["daily_donation"]))),
                 "power": m["end_power"],
                 "rank_change": m["rank_change"],
+                "contribution_change": contribution_change,
                 "merit_change": merit_change,
             })
 
@@ -802,6 +817,7 @@ class AnalyticsService:
         count = len(metrics)
 
         # Extract values
+        contributions = [float(Decimal(str(m["daily_contribution"]))) for m in metrics]
         merits = [float(Decimal(str(m["daily_merit"]))) for m in metrics]
         assists = [float(Decimal(str(m["daily_assist"]))) for m in metrics]
         donations = [float(Decimal(str(m["daily_donation"]))) for m in metrics]
@@ -809,13 +825,26 @@ class AnalyticsService:
         ranks = [m["end_rank"] for m in metrics]
 
         # Calculate averages
+        avg_contribution = sum(contributions) / count
         avg_merit = sum(merits) / count
         avg_assist = sum(assists) / count
         avg_donation = sum(donations) / count
         avg_power = sum(powers) / count
         avg_rank = sum(ranks) / count
 
-        # Calculate quartiles for box plot
+        # Calculate contribution quartiles for box plot
+        sorted_contributions = sorted(contributions)
+        contribution_min = sorted_contributions[0] if sorted_contributions else 0
+        contribution_q1 = _percentile(sorted_contributions, 0.25)
+        contribution_median = _percentile(sorted_contributions, 0.5)
+        contribution_q3 = _percentile(sorted_contributions, 0.75)
+        contribution_max = sorted_contributions[-1] if sorted_contributions else 0
+
+        # Contribution coefficient of variation
+        contribution_std = stdev(contributions) if len(contributions) > 1 else 0
+        contribution_cv = contribution_std / avg_contribution if avg_contribution > 0 else 0
+
+        # Calculate merit quartiles for box plot
         sorted_merits = sorted(merits)
         merit_min = sorted_merits[0] if sorted_merits else 0
         merit_q1 = _percentile(sorted_merits, 0.25)
@@ -823,13 +852,14 @@ class AnalyticsService:
         merit_q3 = _percentile(sorted_merits, 0.75)
         merit_max = sorted_merits[-1] if sorted_merits else 0
 
-        # Coefficient of variation
+        # Merit coefficient of variation
         merit_std = stdev(merits) if len(merits) > 1 else 0
         merit_cv = merit_std / avg_merit if avg_merit > 0 else 0
 
         return {
             "group_name": group_name,
             "member_count": count,
+            "avg_daily_contribution": round(avg_contribution, 2),
             "avg_daily_merit": round(avg_merit, 2),
             "avg_daily_assist": round(avg_assist, 2),
             "avg_daily_donation": round(avg_donation, 2),
@@ -837,6 +867,12 @@ class AnalyticsService:
             "avg_rank": round(avg_rank, 1),
             "best_rank": min(ranks),
             "worst_rank": max(ranks),
+            "contribution_min": round(contribution_min, 2),
+            "contribution_q1": round(contribution_q1, 2),
+            "contribution_median": round(contribution_median, 2),
+            "contribution_q3": round(contribution_q3, 2),
+            "contribution_max": round(contribution_max, 2),
+            "contribution_cv": round(contribution_cv, 3),
             "merit_min": round(merit_min, 2),
             "merit_q1": round(merit_q1, 2),
             "merit_median": round(merit_median, 2),
@@ -855,7 +891,7 @@ class AnalyticsService:
 
         Args:
             group_name: Group name
-            members: List of member dicts with daily_merit, daily_assist, etc.
+            members: List of member dicts with daily_contribution, daily_merit, etc.
 
         Returns:
             GroupStats dict
@@ -867,6 +903,7 @@ class AnalyticsService:
             return self._empty_group_stats(group_name)
 
         # Extract values from member dicts
+        contributions = [m["daily_contribution"] for m in members]
         merits = [m["daily_merit"] for m in members]
         assists = [m["daily_assist"] for m in members]
         donations = [m["daily_donation"] for m in members]
@@ -874,13 +911,26 @@ class AnalyticsService:
         ranks = [m["contribution_rank"] for m in members]
 
         # Calculate averages
+        avg_contribution = sum(contributions) / count
         avg_merit = sum(merits) / count
         avg_assist = sum(assists) / count
         avg_donation = sum(donations) / count
         avg_power = sum(powers) / count
         avg_rank = sum(ranks) / count
 
-        # Calculate quartiles for box plot
+        # Calculate contribution quartiles for box plot
+        sorted_contributions = sorted(contributions)
+        contribution_min = sorted_contributions[0] if sorted_contributions else 0
+        contribution_q1 = _percentile(sorted_contributions, 0.25)
+        contribution_median = _percentile(sorted_contributions, 0.5)
+        contribution_q3 = _percentile(sorted_contributions, 0.75)
+        contribution_max = sorted_contributions[-1] if sorted_contributions else 0
+
+        # Contribution coefficient of variation
+        contribution_std = stdev(contributions) if len(contributions) > 1 else 0
+        contribution_cv = contribution_std / avg_contribution if avg_contribution > 0 else 0
+
+        # Calculate merit quartiles for box plot
         sorted_merits = sorted(merits)
         merit_min = sorted_merits[0] if sorted_merits else 0
         merit_q1 = _percentile(sorted_merits, 0.25)
@@ -888,13 +938,14 @@ class AnalyticsService:
         merit_q3 = _percentile(sorted_merits, 0.75)
         merit_max = sorted_merits[-1] if sorted_merits else 0
 
-        # Coefficient of variation
+        # Merit coefficient of variation
         merit_std = stdev(merits) if len(merits) > 1 else 0
         merit_cv = merit_std / avg_merit if avg_merit > 0 else 0
 
         return {
             "group_name": group_name,
             "member_count": count,
+            "avg_daily_contribution": round(avg_contribution, 2),
             "avg_daily_merit": round(avg_merit, 2),
             "avg_daily_assist": round(avg_assist, 2),
             "avg_daily_donation": round(avg_donation, 2),
@@ -902,6 +953,12 @@ class AnalyticsService:
             "avg_rank": round(avg_rank, 1),
             "best_rank": min(ranks),
             "worst_rank": max(ranks),
+            "contribution_min": round(contribution_min, 2),
+            "contribution_q1": round(contribution_q1, 2),
+            "contribution_median": round(contribution_median, 2),
+            "contribution_q3": round(contribution_q3, 2),
+            "contribution_max": round(contribution_max, 2),
+            "contribution_cv": round(contribution_cv, 3),
             "merit_min": round(merit_min, 2),
             "merit_q1": round(merit_q1, 2),
             "merit_median": round(merit_median, 2),
@@ -915,6 +972,7 @@ class AnalyticsService:
         return {
             "group_name": group_name,
             "member_count": 0,
+            "avg_daily_contribution": 0,
             "avg_daily_merit": 0,
             "avg_daily_assist": 0,
             "avg_daily_donation": 0,
@@ -922,6 +980,12 @@ class AnalyticsService:
             "avg_rank": 0,
             "best_rank": 0,
             "worst_rank": 0,
+            "contribution_min": 0,
+            "contribution_q1": 0,
+            "contribution_median": 0,
+            "contribution_q3": 0,
+            "contribution_max": 0,
+            "contribution_cv": 0,
             "merit_min": 0,
             "merit_q1": 0,
             "merit_median": 0,

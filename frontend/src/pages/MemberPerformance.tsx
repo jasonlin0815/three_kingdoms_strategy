@@ -269,21 +269,26 @@ interface OverviewTabProps {
   readonly allianceAvg: AllianceAverage
   readonly allianceMedian: AllianceMedian
   readonly memberName: string
+  readonly viewMode: ViewMode
+  readonly onViewModeChange: (mode: ViewMode) => void
 }
 
-function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, memberName }: OverviewTabProps) {
+function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, memberName, viewMode, onViewModeChange }: OverviewTabProps) {
   const latestPeriod = periodData[periodData.length - 1]
 
-  // Local state for radar chart view mode toggle
-  const [radarViewMode, setRadarViewMode] = useState<ViewMode>('latest')
+  // Calculate values based on viewMode
+  const contributionValue = viewMode === 'latest' ? latestPeriod.daily_contribution : seasonSummary.avg_daily_contribution
+  const meritValue = viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit
+  const powerValue = viewMode === 'latest' ? latestPeriod.end_power : seasonSummary.avg_power
+  const donationValue = viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation
 
   // Calculate totals and diffs for metrics cards
   const totalDonation = periodData.reduce((sum, d) => sum + d.donation_diff, 0)
   const powerChange = seasonSummary.total_power_change
-  const contributionDiff = calculatePercentDiff(latestPeriod.daily_contribution, allianceAvg.daily_contribution)
-  const meritDiff = calculatePercentDiff(latestPeriod.daily_merit, allianceAvg.daily_merit)
-  const powerDiff = calculatePercentDiff(latestPeriod.end_power, allianceAvg.power)
-  const donationDiff = calculatePercentDiff(seasonSummary.avg_daily_donation, allianceAvg.daily_donation)
+  const contributionDiff = calculatePercentDiff(contributionValue, allianceAvg.daily_contribution)
+  const meritDiff = calculatePercentDiff(meritValue, allianceAvg.daily_merit)
+  const powerDiff = calculatePercentDiff(powerValue, allianceAvg.power)
+  const donationDiff = calculatePercentDiff(donationValue, allianceAvg.daily_donation)
 
   // Expand period data to daily for date-based X axis
   const dailyData = useMemo(() => createDailyChartData(periodData), [periodData])
@@ -292,13 +297,13 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
   // Radar chart data - normalized as percentage of alliance average (100 = alliance avg)
   // This ensures all dimensions are comparable regardless of absolute value differences
   // Also stores raw values for tooltip display
-  // Uses radarViewMode (local state) for toggle between latest period and season average
+  // Uses viewMode (prop) for toggle between latest period and season average
   const radarData = useMemo(() => {
-    const memberContribution = radarViewMode === 'latest' ? latestPeriod.daily_contribution : seasonSummary.avg_daily_contribution
-    const memberMerit = radarViewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit
-    const memberPower = radarViewMode === 'latest' ? latestPeriod.end_power : seasonSummary.current_power
-    const memberAssist = radarViewMode === 'latest' ? latestPeriod.daily_assist : seasonSummary.avg_daily_assist
-    const memberDonation = radarViewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation
+    const memberContribution = viewMode === 'latest' ? latestPeriod.daily_contribution : seasonSummary.avg_daily_contribution
+    const memberMerit = viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit
+    const memberPower = viewMode === 'latest' ? latestPeriod.end_power : seasonSummary.current_power
+    const memberAssist = viewMode === 'latest' ? latestPeriod.daily_assist : seasonSummary.avg_daily_assist
+    const memberDonation = viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation
 
     // Calculate percentage relative to alliance average (avoid division by zero)
     const normalize = (value: number, avg: number) => avg > 0 ? Math.round((value / avg) * 100) : 0
@@ -350,21 +355,31 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
         medianRaw: allianceMedian.daily_donation,
       },
     ]
-  }, [radarViewMode, latestPeriod, seasonSummary, allianceAvg, allianceMedian])
+  }, [viewMode, latestPeriod, seasonSummary, allianceAvg, allianceMedian])
 
 
   return (
     <div className="space-y-6">
+      {/* View Mode Toggle */}
+      <div className="flex items-center justify-end">
+        <Tabs value={viewMode} onValueChange={(v) => onViewModeChange(v as ViewMode)} className="w-auto">
+          <TabsList className="h-8">
+            <TabsTrigger value="latest" className="text-xs px-3">最新一期</TabsTrigger>
+            <TabsTrigger value="season" className="text-xs px-3">賽季以來</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       {/* Current Status Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Daily Contribution */}
         <Card className="border-primary/50">
           <CardHeader className="pb-2">
-            <CardDescription>最新日均貢獻</CardDescription>
+            <CardDescription>{viewMode === 'latest' ? '最新日均貢獻' : '賽季日均貢獻'}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tabular-nums">
-              {formatNumber(latestPeriod.daily_contribution)}
+              {formatNumber(contributionValue)}
             </div>
             <div className="flex items-center gap-1 mt-1">
               {contributionDiff >= 0 ? (
@@ -382,11 +397,11 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
         {/* Daily Merit */}
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>最新日均戰功</CardDescription>
+            <CardDescription>{viewMode === 'latest' ? '最新日均戰功' : '賽季日均戰功'}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tabular-nums">
-              {formatNumber(latestPeriod.daily_merit)}
+              {formatNumber(meritValue)}
             </div>
             <div className="flex items-center gap-1 mt-1">
               {meritDiff >= 0 ? (
@@ -404,12 +419,12 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
         {/* Power */}
         <Card className="border-primary/50">
           <CardHeader className="pb-2">
-            <CardDescription>當前勢力值</CardDescription>
+            <CardDescription>{viewMode === 'latest' ? '當前勢力值' : '賽季平均勢力值'}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold tabular-nums">
-                {formatNumber(latestPeriod.end_power)}
+                {formatNumber(powerValue)}
               </span>
             </div>
             <div className="flex items-center gap-3 mt-2">
@@ -440,17 +455,18 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
         {/* Donation */}
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>賽季總捐獻</CardDescription>
+            <CardDescription>{viewMode === 'latest' ? '最新日均捐獻' : '賽季日均捐獻'}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold tabular-nums">
-                {formatNumber(totalDonation)}
+                {formatNumber(donationValue)}
               </span>
+              <span className="text-muted-foreground text-sm">/日</span>
             </div>
             <div className="flex items-center gap-3 mt-2">
               <span className="text-xs text-muted-foreground">
-                日均: {formatNumber(seasonSummary.avg_daily_donation)}/日
+                賽季總計: {formatNumber(totalDonation)}
               </span>
               <div className="flex items-center gap-1">
                 {donationDiff >= 0 ? (
@@ -626,13 +642,6 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
                 <Legend />
               </RadarChart>
             </ChartContainer>
-            {/* View Mode Toggle */}
-            <Tabs value={radarViewMode} onValueChange={(v) => setRadarViewMode(v as ViewMode)} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 h-8">
-                <TabsTrigger value="latest" className="text-xs">最新一期</TabsTrigger>
-                <TabsTrigger value="season" className="text-xs">賽季以來</TabsTrigger>
-              </TabsList>
-            </Tabs>
           </CardContent>
         </Card>
       </div>
@@ -1448,9 +1457,7 @@ function MemberPerformance() {
   const [selectedMemberId, setSelectedMemberId] = useState<string | undefined>(undefined)
   const [selectedGroup, setSelectedGroup] = useState<string>('all')
   const [activeTab, setActiveTab] = useState('overview')
-
-  // Fixed to 'latest' mode - cards show latest period data, charts show all periods trend
-  const viewMode: ViewMode = 'latest'
+  const [viewMode, setViewMode] = useState<ViewMode>('latest')
 
   // Fetch active season
   const { data: activeSeason, isLoading: isLoadingSeason } = useActiveSeason()
@@ -1711,6 +1718,8 @@ function MemberPerformance() {
                 allianceAvg={allianceAvg}
                 allianceMedian={allianceMedian}
                 memberName={selectedMember?.name ?? '成員'}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
               />
             </TabsContent>
 

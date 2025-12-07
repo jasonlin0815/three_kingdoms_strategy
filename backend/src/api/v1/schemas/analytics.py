@@ -100,6 +100,7 @@ class SeasonSummaryResponse(BaseModel):
     avg_daily_merit: float = Field(..., ge=0, description="Average daily merit")
     avg_daily_assist: float = Field(..., ge=0, description="Average daily assist")
     avg_daily_donation: float = Field(..., ge=0, description="Average daily donation")
+    avg_power: float = Field(..., ge=0, description="Average power across all periods")
 
     # Current status
     current_rank: int = Field(..., description="Current rank (from latest period)")
@@ -216,6 +217,7 @@ class GroupStats(BaseModel):
     member_count: int = Field(..., ge=0, description="Number of members")
 
     # Person-day averages (人日均 - core comparison metrics)
+    avg_daily_contribution: float = Field(..., ge=0, description="Average daily contribution per member")
     avg_daily_merit: float = Field(..., ge=0, description="Average daily merit per member")
     avg_daily_assist: float = Field(..., ge=0, description="Average daily assist per member")
     avg_daily_donation: float = Field(..., ge=0, description="Average daily donation per member")
@@ -225,6 +227,14 @@ class GroupStats(BaseModel):
     avg_rank: float = Field(..., description="Average contribution rank")
     best_rank: int = Field(..., ge=1, description="Best (lowest) rank in group")
     worst_rank: int = Field(..., ge=1, description="Worst (highest) rank in group")
+
+    # Contribution distribution (box plot data)
+    contribution_min: float = Field(..., ge=0, description="Minimum daily contribution")
+    contribution_q1: float = Field(..., ge=0, description="Contribution first quartile (25th percentile)")
+    contribution_median: float = Field(..., ge=0, description="Contribution median (50th percentile)")
+    contribution_q3: float = Field(..., ge=0, description="Contribution third quartile (75th percentile)")
+    contribution_max: float = Field(..., ge=0, description="Maximum daily contribution")
+    contribution_cv: float = Field(..., ge=0, description="Contribution coefficient of variation (std/mean)")
 
     # Merit distribution (box plot data)
     merit_min: float = Field(..., ge=0, description="Minimum daily merit")
@@ -243,11 +253,13 @@ class GroupMember(BaseModel):
     id: str = Field(..., description="Member UUID as string")
     name: str = Field(..., description="Member display name")
     contribution_rank: int = Field(..., ge=1, description="Current contribution rank")
+    daily_contribution: float = Field(..., ge=0, description="Daily average contribution")
     daily_merit: float = Field(..., ge=0, description="Daily average merit")
     daily_assist: float = Field(..., ge=0, description="Daily average assist")
     daily_donation: float = Field(..., ge=0, description="Daily average donation")
     power: int = Field(..., ge=0, description="Current power value")
     rank_change: int | None = Field(None, description="Rank change from previous period")
+    contribution_change: float | None = Field(None, description="Daily contribution change from previous period")
     merit_change: float | None = Field(None, description="Daily merit change from previous period")
 
 
@@ -262,6 +274,7 @@ class GroupTrendItem(BaseModel):
     end_date: date = Field(..., description="Period end date")
     days: int = Field(..., ge=1, description="Number of days in period")
     avg_rank: float = Field(..., description="Average contribution rank for period")
+    avg_contribution: float = Field(..., ge=0, description="Average daily contribution for period")
     avg_merit: float = Field(..., ge=0, description="Average daily merit for period")
     avg_assist: float = Field(..., ge=0, description="Average daily assist for period")
     avg_donation: float = Field(..., ge=0, description="Average daily donation for period")

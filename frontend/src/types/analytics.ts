@@ -88,6 +88,7 @@ export interface SeasonSummaryResponse {
   readonly avg_daily_merit: number
   readonly avg_daily_assist: number
   readonly avg_daily_donation: number
+  readonly avg_power: number
 
   // Current status
   readonly current_rank: number
@@ -150,6 +151,7 @@ export interface GroupStats {
   readonly member_count: number
 
   // Person-day averages (人日均)
+  readonly avg_daily_contribution: number
   readonly avg_daily_merit: number
   readonly avg_daily_assist: number
   readonly avg_daily_donation: number
@@ -159,6 +161,14 @@ export interface GroupStats {
   readonly avg_rank: number
   readonly best_rank: number
   readonly worst_rank: number
+
+  // Contribution distribution (box plot data)
+  readonly contribution_min: number
+  readonly contribution_q1: number
+  readonly contribution_median: number
+  readonly contribution_q3: number
+  readonly contribution_max: number
+  readonly contribution_cv: number
 
   // Merit distribution (box plot data)
   readonly merit_min: number
@@ -176,11 +186,13 @@ export interface GroupMember {
   readonly id: string
   readonly name: string
   readonly contribution_rank: number
+  readonly daily_contribution: number
   readonly daily_merit: number
   readonly daily_assist: number
   readonly daily_donation: number
   readonly power: number
   readonly rank_change: number | null
+  readonly contribution_change: number | null
   readonly merit_change: number | null
 }
 
@@ -194,6 +206,7 @@ export interface GroupTrendItem {
   readonly end_date: string // ISO date string
   readonly days: number
   readonly avg_rank: number
+  readonly avg_contribution: number
   readonly avg_merit: number
   readonly avg_assist: number
   readonly avg_donation: number
