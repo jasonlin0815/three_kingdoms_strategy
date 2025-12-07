@@ -192,9 +192,12 @@ export interface GroupTrendItem {
   readonly period_number: number
   readonly start_date: string // ISO date string
   readonly end_date: string // ISO date string
+  readonly days: number
   readonly avg_rank: number
   readonly avg_merit: number
   readonly avg_assist: number
+  readonly avg_donation: number
+  readonly avg_power: number
   readonly member_count: number
 }
 

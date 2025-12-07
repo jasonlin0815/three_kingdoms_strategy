@@ -260,9 +260,12 @@ class GroupTrendItem(BaseModel):
     period_number: int = Field(..., ge=1, description="Period number within season")
     start_date: date = Field(..., description="Period start date")
     end_date: date = Field(..., description="Period end date")
+    days: int = Field(..., ge=1, description="Number of days in period")
     avg_rank: float = Field(..., description="Average contribution rank for period")
     avg_merit: float = Field(..., ge=0, description="Average daily merit for period")
     avg_assist: float = Field(..., ge=0, description="Average daily assist for period")
+    avg_donation: float = Field(..., ge=0, description="Average daily donation for period")
+    avg_power: float = Field(..., ge=0, description="Average power for period")
     member_count: int = Field(..., ge=0, description="Number of members in group for period")
 
 

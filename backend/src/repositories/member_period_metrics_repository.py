@@ -334,7 +334,7 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
             period_ids: List of period UUID strings
 
         Returns:
-            List of raw metric dicts with period_id, end_rank, daily_merit, daily_assist
+            List of raw metric dicts with period_id, end_rank, daily metrics, and power
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
@@ -343,7 +343,10 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
 
         result = (
             self.client.from_(self.table_name)
-            .select("period_id, member_id, end_rank, daily_merit, daily_assist")
+            .select(
+                "period_id, member_id, end_rank, "
+                "daily_merit, daily_assist, daily_donation, end_power"
+            )
             .in_("period_id", period_ids)
             .in_("member_id", member_ids)
             .execute()

@@ -252,6 +252,92 @@ class AnalyticsService:
             "median_power": round(median(powers), 2),
         }
 
+    async def get_season_alliance_averages(self, season_id: UUID) -> dict:
+        """
+        Calculate alliance average and median metrics across all periods in a season.
+
+        Uses member-day weighted averages: each member's daily metrics are weighted
+        by the number of days in each period they participated.
+
+        Args:
+            season_id: Season UUID
+
+        Returns:
+            Dict with average and median daily metrics, power, and member count
+        """
+        from statistics import median as calc_median
+
+        periods = await self._period_repo.get_by_season(season_id)
+        if not periods:
+            return self._empty_alliance_averages()
+
+        # Collect all member metrics across all periods with day weighting
+        # Structure: member_id -> {total_weighted_metric, total_days}
+        member_totals: dict[UUID, dict] = {}
+
+        for period in periods:
+            metrics = await self._metrics_repo.get_by_period(period.id)
+            days = period.days
+
+            for m in metrics:
+                if m.member_id not in member_totals:
+                    member_totals[m.member_id] = {
+                        "contribution": 0.0,
+                        "merit": 0.0,
+                        "assist": 0.0,
+                        "donation": 0.0,
+                        "power_sum": 0.0,
+                        "power_count": 0,
+                        "days": 0,
+                    }
+
+                totals = member_totals[m.member_id]
+                # Weight daily averages by days in period
+                totals["contribution"] += float(m.daily_contribution) * days
+                totals["merit"] += float(m.daily_merit) * days
+                totals["assist"] += float(m.daily_assist) * days
+                totals["donation"] += float(m.daily_donation) * days
+                totals["power_sum"] += float(m.end_power)
+                totals["power_count"] += 1
+                totals["days"] += days
+
+        if not member_totals:
+            return self._empty_alliance_averages()
+
+        # Calculate each member's season daily average (total weighted / total days)
+        contributions = []
+        merits = []
+        assists = []
+        donations = []
+        powers = []
+
+        for totals in member_totals.values():
+            if totals["days"] > 0:
+                contributions.append(totals["contribution"] / totals["days"])
+                merits.append(totals["merit"] / totals["days"])
+                assists.append(totals["assist"] / totals["days"])
+                donations.append(totals["donation"] / totals["days"])
+            if totals["power_count"] > 0:
+                powers.append(totals["power_sum"] / totals["power_count"])
+
+        count = len(member_totals)
+
+        return {
+            "member_count": count,
+            # Averages across all members
+            "avg_daily_contribution": round(sum(contributions) / count, 2) if contributions else 0,
+            "avg_daily_merit": round(sum(merits) / count, 2) if merits else 0,
+            "avg_daily_assist": round(sum(assists) / count, 2) if assists else 0,
+            "avg_daily_donation": round(sum(donations) / count, 2) if donations else 0,
+            "avg_power": round(sum(powers) / count, 2) if powers else 0,
+            # Medians
+            "median_daily_contribution": round(calc_median(contributions), 2) if contributions else 0,
+            "median_daily_merit": round(calc_median(merits), 2) if merits else 0,
+            "median_daily_assist": round(calc_median(assists), 2) if assists else 0,
+            "median_daily_donation": round(calc_median(donations), 2) if donations else 0,
+            "median_power": round(calc_median(powers), 2) if powers else 0,
+        }
+
     async def get_member_with_comparison(
         self, member_id: UUID, period_id: UUID
     ) -> dict | None:
@@ -489,22 +575,30 @@ class AnalyticsService:
                 ranks = [m["end_rank"] for m in metrics]
                 merits = [float(Decimal(str(m["daily_merit"]))) for m in metrics]
                 assists = [float(Decimal(str(m["daily_assist"]))) for m in metrics]
+                donations = [float(Decimal(str(m["daily_donation"]))) for m in metrics]
+                powers = [float(m["end_power"]) for m in metrics]
 
                 trends.append({
                     "period_label": _build_period_label(period),
                     "period_number": period.period_number,
                     "start_date": period.start_date.isoformat(),
                     "end_date": period.end_date.isoformat(),
+                    "days": period.days,
                     "avg_rank": round(sum(ranks) / count, 1),
                     "avg_merit": round(sum(merits) / count, 2),
                     "avg_assist": round(sum(assists) / count, 2),
+                    "avg_donation": round(sum(donations) / count, 2),
+                    "avg_power": round(sum(powers) / count, 0),
                     "member_count": count,
                 })
 
         trends.sort(key=lambda x: x["period_number"])
 
-        # Get alliance averages for comparison
-        alliance_averages = await self.get_period_alliance_averages(latest_period.id)
+        # Get alliance averages for comparison (use season averages for season view)
+        if view == "season":
+            alliance_averages = await self.get_season_alliance_averages(season_id)
+        else:
+            alliance_averages = await self.get_period_alliance_averages(latest_period.id)
 
         if view == "season":
             # Calculate season-weighted averages for each member

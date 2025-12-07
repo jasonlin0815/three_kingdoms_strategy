@@ -148,13 +148,13 @@ interface OverviewTabProps {
   readonly allianceAverages: AllianceAveragesResponse
   readonly allGroupsData: readonly GroupComparisonItem[]
   readonly periodTrends: readonly GroupTrendItem[]
-  readonly members: readonly GroupMember[]
   readonly viewMode: ViewMode
 }
 
-function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends, members, viewMode }: OverviewTabProps) {
+function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends, viewMode }: OverviewTabProps) {
 
   // Calculate season averages from period trends (for 'season' view mode)
+  // Uses member-day weighting: (sum of avg_metric * member_count * days) / (sum of member_count * days)
   const seasonGroupAverages = useMemo(() => {
     if (periodTrends.length === 0) {
       return {
@@ -166,32 +166,32 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
       }
     }
 
-    // Calculate weighted average based on member count per period
+    // Calculate weighted average based on member-days per period
     let totalMerit = 0
     let totalAssist = 0
+    let totalDonation = 0
+    let totalPower = 0
     let totalRank = 0
-    let totalMemberPeriods = 0
+    let totalMemberDays = 0
 
     for (const period of periodTrends) {
-      totalMerit += period.avg_merit * period.member_count
-      totalAssist += period.avg_assist * period.member_count
-      totalRank += period.avg_rank * period.member_count
-      totalMemberPeriods += period.member_count
+      const memberDays = period.member_count * period.days
+      totalMerit += period.avg_merit * memberDays
+      totalAssist += period.avg_assist * memberDays
+      totalDonation += period.avg_donation * memberDays
+      totalPower += period.avg_power * memberDays
+      totalRank += period.avg_rank * memberDays
+      totalMemberDays += memberDays
     }
-
-    // Donation is not in trends, calculate from current members
-    const totalDonation = members.reduce((sum, m) => sum + m.daily_donation, 0)
-    const totalPower = members.reduce((sum, m) => sum + m.power, 0)
-    const memberCount = members.length || 1
 
     return {
-      avg_daily_merit: totalMemberPeriods > 0 ? totalMerit / totalMemberPeriods : 0,
-      avg_daily_assist: totalMemberPeriods > 0 ? totalAssist / totalMemberPeriods : 0,
-      avg_daily_donation: totalDonation / memberCount,
-      avg_power: totalPower / memberCount,
-      avg_rank: totalMemberPeriods > 0 ? totalRank / totalMemberPeriods : 0,
+      avg_daily_merit: totalMemberDays > 0 ? totalMerit / totalMemberDays : 0,
+      avg_daily_assist: totalMemberDays > 0 ? totalAssist / totalMemberDays : 0,
+      avg_daily_donation: totalMemberDays > 0 ? totalDonation / totalMemberDays : 0,
+      avg_power: totalMemberDays > 0 ? totalPower / totalMemberDays : 0,
+      avg_rank: totalMemberDays > 0 ? totalRank / totalMemberDays : 0,
     }
-  }, [periodTrends, members])
+  }, [periodTrends])
 
   // Capability radar data: normalized to alliance average (100 = alliance average)
   // Uses viewMode for toggle between latest period and season average
@@ -1299,7 +1299,6 @@ function GroupAnalytics() {
                 allianceAverages={allianceAverages}
                 allGroupsData={groupsComparison ?? []}
                 periodTrends={periodTrends}
-                members={groupMembers}
                 viewMode={viewMode}
               />
             </TabsContent>
