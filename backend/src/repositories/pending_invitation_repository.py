@@ -53,7 +53,9 @@ class PendingInvitationRepository(SupabaseRepository[PendingInvitation]):
             "status": "pending",
         }
 
-        result = self.client.from_(self.table_name).insert(data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(data).execute()
+        )
         data_dict = self._handle_supabase_result(result, expect_single=True)
         return self._build_model(data_dict)
 
@@ -67,8 +69,8 @@ class PendingInvitationRepository(SupabaseRepository[PendingInvitation]):
         Returns:
             List of pending invitations
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("invited_email", email.lower())
             .eq("status", "pending")
@@ -87,8 +89,8 @@ class PendingInvitationRepository(SupabaseRepository[PendingInvitation]):
         Returns:
             List of pending invitations
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("status", "pending")
@@ -111,8 +113,8 @@ class PendingInvitationRepository(SupabaseRepository[PendingInvitation]):
         Raises:
             HTTPException: If update fails
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update({"status": "accepted", "accepted_at": "now()"})
             .eq("id", str(invitation_id))
             .execute()
@@ -133,8 +135,8 @@ class PendingInvitationRepository(SupabaseRepository[PendingInvitation]):
         Raises:
             HTTPException: If revoke fails
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update({"status": "revoked"})
             .eq("id", str(invitation_id))
             .execute()
@@ -155,8 +157,8 @@ class PendingInvitationRepository(SupabaseRepository[PendingInvitation]):
         Returns:
             PendingInvitation if exists, None otherwise
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("invited_email", email.lower())

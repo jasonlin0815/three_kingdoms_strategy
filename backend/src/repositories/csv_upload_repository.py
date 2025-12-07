@@ -4,6 +4,7 @@ CSV Upload Repository
 符合 CLAUDE.md 🔴:
 - Inherits from SupabaseRepository
 - Uses _handle_supabase_result() for all queries
+- Uses _execute_async() to avoid blocking event loop
 """
 
 from datetime import datetime
@@ -32,8 +33,8 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("season_id", str(season_id))
             .order("snapshot_date", desc=True)
@@ -59,8 +60,8 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .order("snapshot_date", desc=True)
@@ -84,8 +85,8 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("season_id", str(season_id))
             .order("snapshot_date", desc=True)
@@ -112,7 +113,9 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = self.client.from_(self.table_name).insert(upload_data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(upload_data).execute()
+        )
 
         data = self._handle_supabase_result(result, expect_single=True)
 
@@ -131,8 +134,8 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update(upload_data)
             .eq("id", str(upload_id))
             .execute()
@@ -158,8 +161,8 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("season_id", str(season_id))
@@ -187,8 +190,8 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
 
         符合 CLAUDE.md: Hard delete only
         """
-        result = (
-            self.client.from_(self.table_name).delete().eq("id", str(upload_id)).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).delete().eq("id", str(upload_id)).execute()
         )
 
         self._handle_supabase_result(result, allow_empty=True)

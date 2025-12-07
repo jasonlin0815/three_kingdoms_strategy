@@ -24,7 +24,7 @@ router = APIRouter(prefix="/uploads", tags=["uploads"])
 async def upload_csv(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     service: Annotated[CSVUploadService, Depends(get_csv_upload_service)],
-    season_id: Annotated[UUID, Form()],
+    season_id: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     snapshot_date: Annotated[str | None, Form()] = None,
 ):
@@ -32,7 +32,7 @@ async def upload_csv(
     Upload CSV file for a season
 
     Args:
-        season_id: Season UUID
+        season_id: Season UUID (as string from form)
         file: CSV file upload
         snapshot_date: Optional custom snapshot datetime (ISO format)
         service: CSV upload service (injected)
@@ -43,6 +43,14 @@ async def upload_csv(
 
     符合 CLAUDE.md 🔴: API layer delegates to service
     """
+    # Parse season_id string to UUID
+    try:
+        season_uuid = UUID(season_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid season_id format: {season_id}"
+        ) from e
+
     # Validate file type
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV file")
@@ -60,7 +68,7 @@ async def upload_csv(
     try:
         result = await service.upload_csv(
             user_id=user_id,
-            season_id=season_id,
+            season_id=season_uuid,
             filename=file.filename,
             csv_content=csv_content,
             custom_snapshot_date=snapshot_date,

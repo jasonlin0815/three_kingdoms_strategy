@@ -29,8 +29,8 @@ class HegemonyWeightRepository(SupabaseRepository[HegemonyWeight]):
         Returns:
             List of HegemonyWeight objects, empty list if none found
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("season_id", str(season_id))
             .order("created_at")
@@ -50,8 +50,8 @@ class HegemonyWeightRepository(SupabaseRepository[HegemonyWeight]):
         Returns:
             HegemonyWeight object or None if not found
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("csv_upload_id", str(csv_upload_id))
             .execute()
@@ -72,8 +72,8 @@ class HegemonyWeightRepository(SupabaseRepository[HegemonyWeight]):
         Returns:
             List of HegemonyWeightWithSnapshot objects
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select(
                 """
                 *,
@@ -143,8 +143,8 @@ class HegemonyWeightRepository(SupabaseRepository[HegemonyWeight]):
                 "Please adjust weights so they sum to exactly 1.0"
             )
 
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .insert(
                 {
                     "alliance_id": str(alliance_id),
@@ -206,8 +206,8 @@ class HegemonyWeightRepository(SupabaseRepository[HegemonyWeight]):
             # No updates provided, fetch current
             return await self.get_by_id(weight_id)
 
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update(update_data)
             .eq("id", str(weight_id))
             .execute()
@@ -226,8 +226,8 @@ class HegemonyWeightRepository(SupabaseRepository[HegemonyWeight]):
         Returns:
             True if deleted successfully
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .delete()
             .eq("csv_upload_id", str(csv_upload_id))
             .execute()

@@ -37,7 +37,9 @@ class SeasonRepository(SupabaseRepository[Season]):
         if active_only:
             query = query.eq("is_active", True)
 
-        result = query.order("start_date", desc=True).execute()
+        result = await self._execute_async(
+            lambda: query.order("start_date", desc=True).execute()
+        )
 
         data = self._handle_supabase_result(result, allow_empty=True)
 
@@ -55,8 +57,8 @@ class SeasonRepository(SupabaseRepository[Season]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("is_active", True)
@@ -84,7 +86,9 @@ class SeasonRepository(SupabaseRepository[Season]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = self.client.from_(self.table_name).insert(season_data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(season_data).execute()
+        )
 
         data = self._handle_supabase_result(result, expect_single=True)
 
@@ -103,8 +107,8 @@ class SeasonRepository(SupabaseRepository[Season]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update(season_data)
             .eq("id", str(season_id))
             .execute()
@@ -126,8 +130,8 @@ class SeasonRepository(SupabaseRepository[Season]):
 
         符合 CLAUDE.md: Hard delete only
         """
-        result = (
-            self.client.from_(self.table_name).delete().eq("id", str(season_id)).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).delete().eq("id", str(season_id)).execute()
         )
 
         self._handle_supabase_result(result, allow_empty=True)

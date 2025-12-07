@@ -31,8 +31,8 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("csv_upload_id", str(csv_upload_id))
             .order("contribution_rank")
@@ -58,8 +58,8 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("member_id", str(member_id))
             .order("created_at", desc=True)
@@ -86,8 +86,8 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("member_id", str(member_id))
             .eq("csv_upload_id", str(csv_upload_id))
@@ -116,8 +116,8 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .order("created_at", desc=True)
@@ -141,7 +141,9 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = self.client.from_(self.table_name).insert(snapshot_data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(snapshot_data).execute()
+        )
 
         data = self._handle_supabase_result(result, expect_single=True)
 
@@ -159,7 +161,9 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = self.client.from_(self.table_name).insert(snapshots_data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(snapshots_data).execute()
+        )
 
         data = self._handle_supabase_result(result, allow_empty=False)
 
@@ -177,8 +181,8 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         符合 CLAUDE.md: Hard delete only
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .delete()
             .eq("csv_upload_id", str(csv_upload_id))
             .execute()

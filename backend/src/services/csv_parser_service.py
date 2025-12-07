@@ -21,6 +21,24 @@ class CSVParserService:
         r"同盟統計(\d{4})年(\d{2})月(\d{2})日(\d{2})时(\d{2})分(\d{2})秒\.csv"
     )
 
+    # Field name mapping: internal_name -> list of possible CSV column names
+    # Supports multiple game versions with different field naming conventions
+    FIELD_ALIASES: dict[str, list[str]] = {
+        "member_name": ["成員", "成员", "玩家", "名稱", "名称"],
+        "contribution_rank": ["貢獻排行", "贡献排行", "排行", "排名"],
+        "weekly_contribution": ["貢獻本週", "贡献本周", "本週貢獻", "本周贡献"],
+        "weekly_merit": ["戰功本週", "战功本周", "本週戰功", "本周战功"],
+        "weekly_assist": ["助攻本週", "助攻本周", "本週助攻", "本周助攻"],
+        "weekly_donation": ["捐獻本週", "捐献本周", "本週捐獻", "本周捐献"],
+        "total_contribution": ["貢獻總量", "贡献总量", "總貢獻", "总贡献"],
+        "total_merit": ["戰功總量", "战功总量", "總戰功", "总战功"],
+        "total_assist": ["助攻總量", "助攻总量", "總助攻", "总助攻"],
+        "total_donation": ["捐獻總量", "捐献总量", "總捐獻", "总捐献"],
+        "power_value": ["勢力值", "势力值", "戰力", "战力", "實力", "实力"],
+        "state": ["所屬州", "所属州", "所屬勢力", "所属势力", "州郡", "勢力", "势力"],
+        "group_name": ["分組", "分组", "組別", "组别", "小組", "小组"],
+    }
+
     @staticmethod
     def extract_datetime_from_filename(filename: str) -> datetime:
         """
@@ -53,8 +71,40 @@ class CSVParserService:
 
         return datetime(year, month, day, hour, minute, second)
 
-    @staticmethod
-    def parse_csv_content(csv_content: str) -> list[dict]:
+    @classmethod
+    def _get_field_value(
+        cls, row: dict[str, str], field_name: str, required: bool = True
+    ) -> str | None:
+        """
+        Get field value from row using alias mapping
+
+        Args:
+            row: CSV row dictionary
+            field_name: Internal field name (key in FIELD_ALIASES)
+            required: Whether the field is required
+
+        Returns:
+            Field value or None if not found and not required
+
+        Raises:
+            KeyError: If field is required but not found
+        """
+        aliases = cls.FIELD_ALIASES.get(field_name, [])
+
+        for alias in aliases:
+            if alias in row:
+                return row[alias]
+
+        if required:
+            raise KeyError(
+                f"找不到欄位 '{field_name}'，嘗試了以下名稱: {aliases}。"
+                f"CSV 欄位: {list(row.keys())}"
+            )
+
+        return None
+
+    @classmethod
+    def parse_csv_content(cls, csv_content: str) -> list[dict]:
         """
         Parse CSV content into structured data
 
@@ -66,7 +116,7 @@ class CSVParserService:
 
         CSV Format:
             成員, 貢獻排行, 貢獻本週, 戰功本週, 助攻本週, 捐獻本週,
-            貢獻總量, 戰功總量, 助攻總量, 捐獻總量, 勢力值, 所屬州, 分組
+            貢獻總量, 戰功總量, 助攻總量, 捐獻總量, 勢力值, 所屬州/所屬勢力, 分組
 
         符合 CLAUDE.md 🟡: Pure data transformation
         """
@@ -92,20 +142,24 @@ class CSVParserService:
             # Strip whitespace from all values
             row = {k.strip(): v.strip() for k, v in row.items()}
 
+            # Get group name and handle "未分組" as None
+            group_value = cls._get_field_value(row, "group_name", required=False)
+            group_name = None if group_value in (None, "未分組", "未分组") else group_value
+
             member_data = {
-                "member_name": row["成員"],
-                "contribution_rank": int(row["貢獻排行"]),
-                "weekly_contribution": int(row["貢獻本週"]),
-                "weekly_merit": int(row["戰功本週"]),
-                "weekly_assist": int(row["助攻本週"]),
-                "weekly_donation": int(row["捐獻本週"]),
-                "total_contribution": int(row["貢獻總量"]),
-                "total_merit": int(row["戰功總量"]),
-                "total_assist": int(row["助攻總量"]),
-                "total_donation": int(row["捐獻總量"]),
-                "power_value": int(row["勢力值"]),
-                "state": row["所屬州"],
-                "group_name": row["分組"] if row["分組"] != "未分組" else None,
+                "member_name": cls._get_field_value(row, "member_name"),
+                "contribution_rank": int(cls._get_field_value(row, "contribution_rank")),
+                "weekly_contribution": int(cls._get_field_value(row, "weekly_contribution")),
+                "weekly_merit": int(cls._get_field_value(row, "weekly_merit")),
+                "weekly_assist": int(cls._get_field_value(row, "weekly_assist")),
+                "weekly_donation": int(cls._get_field_value(row, "weekly_donation")),
+                "total_contribution": int(cls._get_field_value(row, "total_contribution")),
+                "total_merit": int(cls._get_field_value(row, "total_merit")),
+                "total_assist": int(cls._get_field_value(row, "total_assist")),
+                "total_donation": int(cls._get_field_value(row, "total_donation")),
+                "power_value": int(cls._get_field_value(row, "power_value")),
+                "state": cls._get_field_value(row, "state", required=False) or "",
+                "group_name": group_name,
             }
 
             members.append(member_data)

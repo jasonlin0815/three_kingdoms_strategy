@@ -35,8 +35,8 @@ class AllianceRepository(SupabaseRepository[Alliance]):
         """
         # Query alliance through collaborators relationship
         # Get first alliance user is collaborator of (Phase 1: single alliance per user)
-        result = (
-            self.client.from_("alliance_collaborators")
+        result = await self._execute_async(
+            lambda: self.client.from_("alliance_collaborators")
             .select("alliances(*)")
             .eq("user_id", str(user_id))
             .order("joined_at", desc=True)
@@ -63,7 +63,9 @@ class AllianceRepository(SupabaseRepository[Alliance]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = self.client.from_(self.table_name).insert(alliance_data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(alliance_data).execute()
+        )
 
         data = self._handle_supabase_result(result, expect_single=True)
 
@@ -82,8 +84,8 @@ class AllianceRepository(SupabaseRepository[Alliance]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update(alliance_data)
             .eq("id", str(alliance_id))
             .execute()
@@ -105,8 +107,8 @@ class AllianceRepository(SupabaseRepository[Alliance]):
 
         符合 CLAUDE.md: Hard delete only
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .delete()
             .eq("id", str(alliance_id))
             .execute()

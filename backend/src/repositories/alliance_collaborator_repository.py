@@ -49,8 +49,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Raises:
             HTTPException: If Supabase operation fails
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .insert(
                 {
                     "alliance_id": str(alliance_id),
@@ -76,8 +76,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Returns:
             bool: True if successful
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .delete()
             .eq("alliance_id", str(alliance_id))
             .eq("user_id", str(user_id))
@@ -100,8 +100,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Note:
             Returns raw dict because we need to enrich with user data
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .order("joined_at")
@@ -120,8 +120,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Returns:
             list[dict]: List of memberships with alliance data
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*, alliances(*)")
             .eq("user_id", str(user_id))
             .order("joined_at", desc=True)
@@ -141,8 +141,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Returns:
             bool: True if user is collaborator
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("id")
             .eq("alliance_id", str(alliance_id))
             .eq("user_id", str(user_id))
@@ -166,8 +166,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Returns:
             str | None: Role name or None if not a collaborator
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("role")
             .eq("alliance_id", str(alliance_id))
             .eq("user_id", str(user_id))
@@ -192,8 +192,8 @@ class AllianceCollaboratorRepository(SupabaseRepository[AllianceCollaboratorDB])
         Returns:
             AllianceCollaboratorDB: Updated collaborator record
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update({"role": new_role})
             .eq("alliance_id", str(alliance_id))
             .eq("user_id", str(user_id))

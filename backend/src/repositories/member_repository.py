@@ -34,13 +34,13 @@ class MemberRepository(SupabaseRepository[Member]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        query = self.client.from_(self.table_name).select("*").eq("alliance_id", str(alliance_id))
+        def _query():
+            query = self.client.from_(self.table_name).select("*").eq("alliance_id", str(alliance_id))
+            if active_only:
+                query = query.eq("is_active", True)
+            return query.order("name").execute()
 
-        if active_only:
-            query = query.eq("is_active", True)
-
-        result = query.order("name").execute()
-
+        result = await self._execute_async(_query)
         data = self._handle_supabase_result(result, allow_empty=True)
 
         return self._build_models(data)
@@ -58,8 +58,8 @@ class MemberRepository(SupabaseRepository[Member]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("name", name)
@@ -85,7 +85,9 @@ class MemberRepository(SupabaseRepository[Member]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = self.client.from_(self.table_name).insert(member_data).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).insert(member_data).execute()
+        )
 
         data = self._handle_supabase_result(result, expect_single=True)
 
@@ -104,8 +106,8 @@ class MemberRepository(SupabaseRepository[Member]):
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .update(member_data)
             .eq("id", str(member_id))
             .execute()
@@ -164,8 +166,8 @@ class MemberRepository(SupabaseRepository[Member]):
 
         符合 CLAUDE.md 🔴: Batch upsert for performance
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .upsert(
                 members_data,
                 on_conflict="alliance_id,name",
@@ -192,8 +194,8 @@ class MemberRepository(SupabaseRepository[Member]):
         Note: This will CASCADE delete all related snapshots
         符合 CLAUDE.md 🔴: Hard delete for clean re-upload
         """
-        result = (
-            self.client.from_(self.table_name)
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
             .delete()
             .eq("alliance_id", str(alliance_id))
             .execute()
@@ -215,8 +217,8 @@ class MemberRepository(SupabaseRepository[Member]):
 
         符合 CLAUDE.md: Hard delete only
         """
-        result = (
-            self.client.from_(self.table_name).delete().eq("id", str(member_id)).execute()
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name).delete().eq("id", str(member_id)).execute()
         )
 
         self._handle_supabase_result(result, allow_empty=True)
