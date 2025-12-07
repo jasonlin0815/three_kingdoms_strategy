@@ -13,13 +13,6 @@
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
 import { BoxPlotComparison } from '@/components/analytics/BoxPlot'
@@ -247,43 +240,6 @@ function KpiCard({ title, value, subtitle, trend, highlight }: KpiCardProps) {
   )
 }
 
-interface ViewModeToggleProps {
-  readonly value: ViewMode
-  readonly onChange: (mode: ViewMode) => void
-}
-
-function ViewModeToggle({ value, onChange }: ViewModeToggleProps) {
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="text-muted-foreground">檢視:</span>
-      <div className="flex rounded-md border">
-        <button
-          type="button"
-          className={`px-3 py-1.5 text-sm transition-colors ${
-            value === 'latest'
-              ? 'bg-primary text-primary-foreground'
-              : 'hover:bg-muted'
-          }`}
-          onClick={() => onChange('latest')}
-        >
-          最新期
-        </button>
-        <button
-          type="button"
-          className={`px-3 py-1.5 text-sm transition-colors border-l ${
-            value === 'season'
-              ? 'bg-primary text-primary-foreground'
-              : 'hover:bg-muted'
-          }`}
-          onClick={() => onChange('season')}
-        >
-          賽季均值
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ============================================================================
 // Tab 1: Overview
 // ============================================================================
@@ -321,10 +277,6 @@ function OverviewTab({ viewMode }: OverviewTabProps) {
     ? ((LATEST_DATA.avg_power - prevData.avg_power) / prevData.avg_power) * 100
     : null
 
-  // Calculate health metrics
-  const allGroupsCv = MOCK_GROUPS_LATEST.reduce((sum, g) => sum + g.contribution_cv, 0) / MOCK_GROUPS_LATEST.length
-  const avgRankChange = 2.3 // Mock value
-
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -355,16 +307,17 @@ function OverviewTab({ viewMode }: OverviewTabProps) {
         />
       </div>
 
-      {/* Trend Charts */}
+      {/* Trend Charts with Distribution */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Contribution Trend */}
+        {/* Contribution Trend + Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">貢獻趨勢</CardTitle>
-            <CardDescription>人日均貢獻與中位數</CardDescription>
+            <CardTitle className="text-base">貢獻趨勢與分佈</CardTitle>
+            <CardDescription>人日均貢獻趨勢與區間分佈</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={trendChartConfig} className="h-[280px] w-full">
+          <CardContent className="space-y-6">
+            {/* Trend Line */}
+            <ChartContainer config={trendChartConfig} className="h-[200px] w-full">
               <LineChart data={dailyTrendData} margin={{ left: 12, right: 12 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
@@ -415,17 +368,46 @@ function OverviewTab({ viewMode }: OverviewTabProps) {
                 />
               </LineChart>
             </ChartContainer>
+
+            {/* Distribution Bar */}
+            <div className="border-t pt-4">
+              <div className="text-sm font-medium mb-2">區間分佈</div>
+              <ChartContainer config={distributionConfig} className="h-[140px] w-full">
+                <BarChart data={MOCK_CONTRIBUTION_DISTRIBUTION} margin={{ left: 12, right: 12 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="range" tickLine={false} axisLine={false} className="text-xs" />
+                  <YAxis tickLine={false} axisLine={false} className="text-xs" width={30} />
+                  <ChartTooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="rounded-lg border bg-background p-2 shadow-sm">
+                          <div className="font-medium">{d.range}</div>
+                          <div className="text-sm">{d.count} 人</div>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+              <div className="text-xs text-muted-foreground mt-2">
+                平均: {formatNumber(data.avg_daily_contribution)} / 中位數: {formatNumber(viewMode === 'latest' ? LATEST_DATA.median_daily_contribution : MOCK_SEASON_AVERAGES.median_daily_contribution)}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Merit Trend */}
+        {/* Merit Trend + Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">戰功趨勢</CardTitle>
-            <CardDescription>人日均戰功與中位數</CardDescription>
+            <CardTitle className="text-base">戰功趨勢與分佈</CardTitle>
+            <CardDescription>人日均戰功趨勢與區間分佈</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={trendChartConfig} className="h-[280px] w-full">
+          <CardContent className="space-y-6">
+            {/* Trend Line */}
+            <ChartContainer config={trendChartConfig} className="h-[200px] w-full">
               <LineChart data={dailyTrendData} margin={{ left: 12, right: 12 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
@@ -476,60 +458,37 @@ function OverviewTab({ viewMode }: OverviewTabProps) {
                 />
               </LineChart>
             </ChartContainer>
+
+            {/* Distribution Bar */}
+            <div className="border-t pt-4">
+              <div className="text-sm font-medium mb-2">區間分佈</div>
+              <ChartContainer config={distributionConfig} className="h-[140px] w-full">
+                <BarChart data={MOCK_MERIT_DISTRIBUTION} margin={{ left: 12, right: 12 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="range" tickLine={false} axisLine={false} className="text-xs" />
+                  <YAxis tickLine={false} axisLine={false} className="text-xs" width={30} />
+                  <ChartTooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="rounded-lg border bg-background p-2 shadow-sm">
+                          <div className="font-medium">{d.range}</div>
+                          <div className="text-sm">{d.count} 人</div>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar dataKey="count" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+              <div className="text-xs text-muted-foreground mt-2">
+                平均: {formatNumber(data.avg_daily_merit)} / 中位數: {formatNumber(viewMode === 'latest' ? LATEST_DATA.median_daily_merit : MOCK_SEASON_AVERAGES.median_daily_merit)}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Health Metrics */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">健康指標</CardTitle>
-          <CardDescription>同盟整體表現均衡度</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Contribution CV */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>貢獻均衡度 (CV)</span>
-                <span className={`font-medium ${allGroupsCv < 0.5 ? 'text-primary' : allGroupsCv < 0.8 ? 'text-yellow-600' : 'text-destructive'}`}>
-                  {allGroupsCv.toFixed(2)}
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className={`h-full transition-all ${allGroupsCv < 0.5 ? 'bg-primary' : allGroupsCv < 0.8 ? 'bg-yellow-500' : 'bg-destructive'}`}
-                  style={{ width: `${Math.min(allGroupsCv * 100, 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {allGroupsCv < 0.5 ? '分佈均衡' : allGroupsCv < 0.8 ? '中等差異' : '分佈不均'}
-                {' '}(CV 越低越均衡)
-              </p>
-            </div>
-
-            {/* Average Rank Change */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>平均排名變化</span>
-                <span className={`font-medium ${avgRankChange > 0 ? 'text-primary' : avgRankChange < 0 ? 'text-destructive' : ''}`}>
-                  {avgRankChange > 0 ? '+' : ''}{avgRankChange.toFixed(1)}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {avgRankChange > 0 ? (
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                ) : avgRankChange < 0 ? (
-                  <TrendingDown className="h-5 w-5 text-destructive" />
-                ) : null}
-                <span className="text-sm text-muted-foreground">
-                  {avgRankChange > 0 ? '整體進步趨勢' : avgRankChange < 0 ? '需要關注' : '維持穩定'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }
@@ -588,26 +547,12 @@ function GroupComparisonTab({ viewMode }: GroupComparisonTabProps) {
               <CardTitle className="text-base">組別分佈對比</CardTitle>
               <CardDescription>各組 Min / Q1 / Median / Q3 / Max</CardDescription>
             </div>
-            <div className="flex rounded-md border">
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm transition-colors ${
-                  boxPlotMetric === 'contribution' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                }`}
-                onClick={() => setBoxPlotMetric('contribution')}
-              >
-                貢獻
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm transition-colors border-l ${
-                  boxPlotMetric === 'merit' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                }`}
-                onClick={() => setBoxPlotMetric('merit')}
-              >
-                戰功
-              </button>
-            </div>
+            <Tabs value={boxPlotMetric} onValueChange={(v) => setBoxPlotMetric(v as 'contribution' | 'merit')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="contribution" className="text-xs px-3">貢獻</TabsTrigger>
+                <TabsTrigger value="merit" className="text-xs px-3">戰功</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </CardHeader>
         <CardContent>
@@ -615,47 +560,24 @@ function GroupComparisonTab({ viewMode }: GroupComparisonTabProps) {
         </CardContent>
       </Card>
 
-      {/* Metric Selector */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-muted-foreground">指標:</span>
-        <div className="flex rounded-md border">
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-sm transition-colors ${
-              metric === 'contribution' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-            }`}
-            onClick={() => setMetric('contribution')}
-          >
-            人日均貢獻
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-sm transition-colors border-l ${
-              metric === 'merit' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-            }`}
-            onClick={() => setMetric('merit')}
-          >
-            人日均戰功
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-sm transition-colors border-l ${
-              metric === 'rank' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-            }`}
-            onClick={() => setMetric('rank')}
-          >
-            平均排名
-          </button>
-        </div>
-      </div>
-
       {/* Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">組別{metric === 'contribution' ? '貢獻' : metric === 'merit' ? '戰功' : '排名'}對比</CardTitle>
-          <CardDescription>
-            {metric === 'rank' ? '排名越小越好' : '按數值高低排序'}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">組別指標對比</CardTitle>
+              <CardDescription>
+                {metric === 'rank' ? '排名越小越好' : '按數值高低排序'}
+              </CardDescription>
+            </div>
+            <Tabs value={metric} onValueChange={(v) => setMetric(v as 'contribution' | 'merit' | 'rank')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="contribution" className="text-xs px-3">貢獻</TabsTrigger>
+                <TabsTrigger value="merit" className="text-xs px-3">戰功</TabsTrigger>
+                <TabsTrigger value="rank" className="text-xs px-3">排名</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </CardHeader>
         <CardContent>
           <ChartContainer config={groupBarConfig} className="h-[320px] w-full">
@@ -854,26 +776,12 @@ function MemberDistributionTab({ viewMode }: MemberDistributionTabProps) {
               <CardTitle className="text-base">成員排行</CardTitle>
               <CardDescription>本期表現 Top 10 / Bottom 5</CardDescription>
             </div>
-            <div className="flex rounded-md border">
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm transition-colors ${
-                  showTop ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                }`}
-                onClick={() => setShowTop(true)}
-              >
-                Top 10
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm transition-colors border-l ${
-                  !showTop ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                }`}
-                onClick={() => setShowTop(false)}
-              >
-                Bottom 5
-              </button>
-            </div>
+            <Tabs value={showTop ? 'top' : 'bottom'} onValueChange={(v) => setShowTop(v === 'top')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="top" className="text-xs px-3">Top 10</TabsTrigger>
+                <TabsTrigger value="bottom" className="text-xs px-3">Bottom 5</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </CardHeader>
         <CardContent>
@@ -961,7 +869,6 @@ function MemberDistributionTab({ viewMode }: MemberDistributionTabProps) {
 function AllianceAnalytics() {
   const [activeTab, setActiveTab] = useState('overview')
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
-  const [selectedPeriod, setSelectedPeriod] = useState(CURRENT_PERIOD.period_label)
 
   return (
     <AllianceGuard>
@@ -975,24 +882,13 @@ function AllianceAnalytics() {
             </p>
           </div>
 
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-4">
-            <ViewModeToggle value={viewMode} onChange={setViewMode} />
-            {viewMode === 'latest' && (
-              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MOCK_PERIODS.map((p) => (
-                    <SelectItem key={p.period_number} value={p.period_label}>
-                      {p.period_label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          {/* View Mode Toggle */}
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+            <TabsList className="h-8">
+              <TabsTrigger value="latest" className="text-xs px-3">最新一期</TabsTrigger>
+              <TabsTrigger value="season" className="text-xs px-3">賽季以來</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {/* Tab Navigation */}

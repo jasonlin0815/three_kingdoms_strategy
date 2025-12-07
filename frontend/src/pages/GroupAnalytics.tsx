@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
-import { BoxPlot } from '@/components/analytics/BoxPlot'
+import { DetailedStripPlot } from '@/components/analytics/BoxPlot'
 import {
   TrendingUp,
   TrendingDown,
@@ -486,19 +486,20 @@ function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistri
 
   return (
     <div className="space-y-6">
-      {/* Box Plot with Strip Plot */}
+      {/* Detailed Strip Plot - member list with visual positions */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">戰功分佈概覽</CardTitle>
           <CardDescription>
-            箱型圖統計 · 每個圓點代表一位成員
+            箱型圖統計 · 每位成員獨立一行顯示
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <BoxPlot
+          <DetailedStripPlot
             stats={boxPlotStats}
             points={stripPlotPoints}
             color="primary"
+            sortOrder="desc"
           />
         </CardContent>
       </Card>
@@ -661,19 +662,20 @@ function ContributionDistributionTab({ groupStats, members, periodTrends }: Cont
 
   return (
     <div className="space-y-6">
-      {/* Box Plot with Strip Plot */}
+      {/* Detailed Strip Plot - member list with visual positions */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">貢獻分佈概覽</CardTitle>
           <CardDescription>
-            箱型圖統計 · 每個圓點代表一位成員
+            箱型圖統計 · 每位成員獨立一行顯示
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <BoxPlot
+          <DetailedStripPlot
             stats={boxPlotStats}
             points={stripPlotPoints}
             color="chart-3"
+            sortOrder="desc"
           />
         </CardContent>
       </Card>
