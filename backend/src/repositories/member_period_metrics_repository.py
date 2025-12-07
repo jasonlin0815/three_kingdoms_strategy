@@ -301,7 +301,7 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
         """
         result = (
             self.client.from_(self.table_name)
-            .select("*, members(id, name)")
+            .select("*, members(name)")
             .eq("period_id", str(period_id))
             .eq("end_group", group_name)
             .order("daily_merit", desc=True)
@@ -310,80 +310,46 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
 
         data = self._handle_supabase_result(result, allow_empty=True)
 
-        # Flatten member info
+        # Flatten member info - preserve original member_id from table
         for row in data:
             member_data = row.pop("members", {})
-            row["member_id"] = member_data.get("id", "")
+            # Keep original member_id, only add member_name from join
             row["member_name"] = member_data.get("name", "Unknown")
 
         return data
 
-    async def get_group_metrics_by_season(
-        self, season_id: UUID, group_name: str
+    async def get_members_metrics_for_periods(
+        self, member_ids: list[str], period_ids: list[str]
     ) -> list[dict]:
         """
-        Get group metrics across all periods in a season.
+        Get metrics for specific members across specific periods.
+
+        This tracks the given members' performance across all periods,
+        regardless of what group they were in at each period.
+        Used for group trend analysis where we want to see how
+        CURRENT group members performed historically.
 
         Args:
-            season_id: Season UUID
-            group_name: Group name to filter by
+            member_ids: List of member UUID strings
+            period_ids: List of period UUID strings
 
         Returns:
-            List of dicts with period info and aggregated group metrics
+            List of raw metric dicts with period_id, end_rank, daily_merit, daily_assist
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
-        from collections import defaultdict
-        from decimal import Decimal
+        if not member_ids or not period_ids:
+            return []
 
-        # Join with periods to get period info and filter by season
         result = (
             self.client.from_(self.table_name)
-            .select(
-                "period_id, end_group, end_rank, daily_merit, daily_assist, "
-                "periods(period_number, start_date, end_date, season_id)"
-            )
-            .eq("end_group", group_name)
+            .select("period_id, member_id, end_rank, daily_merit, daily_assist")
+            .in_("period_id", period_ids)
+            .in_("member_id", member_ids)
             .execute()
         )
 
-        data = self._handle_supabase_result(result, allow_empty=True)
-
-        # Filter by season_id and group by period
-        period_groups: dict[str, list[dict]] = defaultdict(list)
-        period_info: dict[str, dict] = {}
-
-        for row in data:
-            periods_data = row.get("periods", {})
-            if periods_data and str(periods_data.get("season_id")) == str(season_id):
-                period_id = row["period_id"]
-                period_groups[period_id].append(row)
-                if period_id not in period_info:
-                    period_info[period_id] = periods_data
-
-        # Calculate aggregates per period
-        results = []
-        for period_id, metrics in period_groups.items():
-            info = period_info[period_id]
-            count = len(metrics)
-
-            ranks = [m["end_rank"] for m in metrics]
-            merits = [float(Decimal(str(m["daily_merit"]))) for m in metrics]
-            assists = [float(Decimal(str(m["daily_assist"]))) for m in metrics]
-
-            results.append({
-                "period_id": period_id,
-                "period_number": info["period_number"],
-                "start_date": info["start_date"],
-                "end_date": info["end_date"],
-                "member_count": count,
-                "avg_rank": sum(ranks) / count,
-                "avg_merit": sum(merits) / count,
-                "avg_assist": sum(assists) / count,
-            })
-
-        # Sort by period_number
-        return sorted(results, key=lambda x: x["period_number"])
+        return self._handle_supabase_result(result, allow_empty=True)
 
     async def get_all_groups_for_period(self, period_id: UUID) -> list[dict]:
         """

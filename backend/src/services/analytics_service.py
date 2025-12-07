@@ -410,7 +410,6 @@ class AnalyticsService:
         Returns:
             Dict with stats, members, trends, and alliance_averages
         """
-        from datetime import date as date_type
         from decimal import Decimal
 
         # Get all periods for the season
@@ -457,34 +456,46 @@ class AnalyticsService:
         stats = self._calculate_group_stats(group_name, group_metrics)
 
         # Get group trends across all periods
-        trend_data = await self._metrics_repo.get_group_metrics_by_season(
-            season_id, group_name
+        # Use current group members to track their historical performance
+        # This ensures Period 1 is included even if members had different groups then
+        member_ids = [m["member_id"] for m in group_metrics]
+        period_ids = [str(p.id) for p in periods]
+
+        trend_data = await self._metrics_repo.get_members_metrics_for_periods(
+            member_ids, period_ids
         )
+
+        # Group by period and calculate aggregates
+        from collections import defaultdict
+
+        period_groups: dict[str, list[dict]] = defaultdict(list)
+        for row in trend_data:
+            period_groups[row["period_id"]].append(row)
 
         # Build period label map
         period_map = {str(p.id): p for p in periods}
         trends = []
-        for t in trend_data:
-            period = period_map.get(t["period_id"])
+        for period_id_str, metrics in period_groups.items():
+            period = period_map.get(period_id_str)
             if period:
-                # Parse dates if they're strings
-                start_date = t["start_date"]
-                end_date = t["end_date"]
-                if isinstance(start_date, str):
-                    start_date = date_type.fromisoformat(start_date)
-                if isinstance(end_date, str):
-                    end_date = date_type.fromisoformat(end_date)
+                count = len(metrics)
+                ranks = [m["end_rank"] for m in metrics]
+                merits = [float(Decimal(str(m["daily_merit"]))) for m in metrics]
+                assists = [float(Decimal(str(m["daily_assist"]))) for m in metrics]
 
                 trends.append({
                     "period_label": _build_period_label(period),
-                    "period_number": t["period_number"],
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "avg_rank": round(t["avg_rank"], 1),
-                    "avg_merit": round(t["avg_merit"], 2),
-                    "avg_assist": round(t["avg_assist"], 2),
-                    "member_count": t["member_count"],
+                    "period_number": period.period_number,
+                    "start_date": period.start_date.isoformat(),
+                    "end_date": period.end_date.isoformat(),
+                    "avg_rank": round(sum(ranks) / count, 1),
+                    "avg_merit": round(sum(merits) / count, 2),
+                    "avg_assist": round(sum(assists) / count, 2),
+                    "member_count": count,
                 })
+
+        # Sort by period_number
+        trends.sort(key=lambda x: x["period_number"])
 
         # Get alliance averages for comparison
         alliance_averages = await self.get_period_alliance_averages(latest_period.id)
