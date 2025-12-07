@@ -70,6 +70,13 @@ import {
 } from '@/lib/chart-utils'
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+// Subtle blue-gray for median lines (distinct from muted-foreground but still muted)
+const MEDIAN_LINE_COLOR = 'hsl(215 20% 55%)'
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -83,12 +90,27 @@ interface DailyDataPoint {
   readonly dailyDonation: number
   readonly endRank: number
   readonly endPower: number
+  // Alliance averages
   readonly allianceAvgMerit: number
   readonly allianceAvgAssist: number
+  readonly allianceAvgDonation: number
+  readonly allianceAvgPower: number
+  // Alliance medians
+  readonly allianceMedianMerit: number
+  readonly allianceMedianAssist: number
+  readonly allianceMedianDonation: number
+  readonly allianceMedianPower: number
 }
 
-// Alliance average derived from trend data
+// Alliance average and median derived from trend data
 interface AllianceAverage {
+  readonly daily_merit: number
+  readonly daily_assist: number
+  readonly daily_donation: number
+  readonly power: number
+}
+
+interface AllianceMedian {
   readonly daily_merit: number
   readonly daily_assist: number
   readonly daily_donation: number
@@ -98,12 +120,43 @@ interface AllianceAverage {
 type ViewMode = 'latest' | 'season'
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Create daily chart data from period data.
+ * Expands period data to daily data points for date-based X axis.
+ * Uses expandPeriodsToDaily with a mapper for member performance charts.
+ */
+function createDailyChartData(periodData: readonly MemberTrendItem[]): DailyDataPoint[] {
+  return expandPeriodsToDaily(periodData, (p) => ({
+    dailyMerit: p.daily_merit,
+    dailyAssist: p.daily_assist,
+    dailyDonation: p.daily_donation,
+    endRank: p.end_rank,
+    endPower: p.end_power,
+    allianceAvgMerit: p.alliance_avg_merit,
+    allianceAvgAssist: p.alliance_avg_assist,
+    allianceAvgDonation: p.alliance_avg_donation,
+    allianceAvgPower: p.alliance_avg_power,
+    allianceMedianMerit: p.alliance_median_merit,
+    allianceMedianAssist: p.alliance_median_assist,
+    allianceMedianDonation: p.alliance_median_donation,
+    allianceMedianPower: p.alliance_median_power,
+  }))
+}
+
+// ============================================================================
 // Chart Configurations
 // ============================================================================
 
 const rankChartConfig = {
   rank: {
     label: '排名',
+    color: 'var(--chart-2)',
+  },
+  merit: {
+    label: '日均戰功',
     color: 'var(--primary)',
   },
 } satisfies ChartConfig
@@ -117,6 +170,10 @@ const radarChartConfig = {
     label: '同盟平均',
     color: 'var(--muted-foreground)',
   },
+  median: {
+    label: '同盟中位數',
+    color: MEDIAN_LINE_COLOR,
+  },
 } satisfies ChartConfig
 
 const meritChartConfig = {
@@ -127,6 +184,10 @@ const meritChartConfig = {
   alliance_avg_merit: {
     label: '同盟平均',
     color: 'var(--muted-foreground)',
+  },
+  alliance_median_merit: {
+    label: '同盟中位數',
+    color: MEDIAN_LINE_COLOR,
   },
 } satisfies ChartConfig
 
@@ -139,6 +200,10 @@ const assistChartConfig = {
     label: '同盟平均',
     color: 'var(--muted-foreground)',
   },
+  alliance_median_assist: {
+    label: '同盟中位數',
+    color: MEDIAN_LINE_COLOR,
+  },
 } satisfies ChartConfig
 
 const powerChartConfig = {
@@ -146,12 +211,28 @@ const powerChartConfig = {
     label: '勢力值',
     color: 'var(--primary)',
   },
+  alliance_avg_power: {
+    label: '同盟平均',
+    color: 'var(--muted-foreground)',
+  },
+  alliance_median_power: {
+    label: '同盟中位數',
+    color: MEDIAN_LINE_COLOR,
+  },
 } satisfies ChartConfig
 
 const donationChartConfig = {
   donation: {
     label: '捐獻',
     color: 'var(--chart-3)',
+  },
+  alliance_avg_donation: {
+    label: '同盟平均',
+    color: 'var(--muted-foreground)',
+  },
+  alliance_median_donation: {
+    label: '同盟中位數',
+    color: MEDIAN_LINE_COLOR,
   },
 } satisfies ChartConfig
 
@@ -163,28 +244,17 @@ interface OverviewTabProps {
   readonly periodData: readonly MemberTrendItem[]
   readonly seasonSummary: SeasonSummaryResponse
   readonly allianceAvg: AllianceAverage
+  readonly allianceMedian: AllianceMedian
   readonly viewMode: ViewMode
   readonly totalMembers: number
   readonly memberName: string
 }
 
-function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMembers, memberName }: OverviewTabProps) {
+function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, viewMode, totalMembers, memberName }: OverviewTabProps) {
   const latestPeriod = periodData[periodData.length - 1]
 
   // Expand period data to daily for date-based X axis
-  const dailyData = useMemo(
-    () =>
-      expandPeriodsToDaily(periodData, (p) => ({
-        dailyMerit: p.daily_merit,
-        dailyAssist: p.daily_assist,
-        dailyDonation: p.daily_donation,
-        endRank: p.end_rank,
-        endPower: p.end_power,
-        allianceAvgMerit: p.alliance_avg_merit,
-        allianceAvgAssist: p.alliance_avg_assist,
-      })),
-    [periodData]
-  )
+  const dailyData = useMemo(() => createDailyChartData(periodData), [periodData])
   const xAxisTicks = useMemo(() => getPeriodBoundaryTicks(periodData), [periodData])
 
   // Calculate rank Y axis domain
@@ -208,18 +278,22 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
 
     return [
       {
-        metric: '勢力值',
-        member: normalize(memberPower, allianceAvg.power),
-        memberRaw: memberPower,
-        alliance: 100,
-        allianceRaw: allianceAvg.power,
-      },
-      {
         metric: '戰功',
         member: normalize(memberMerit, allianceAvg.daily_merit),
         memberRaw: memberMerit,
         alliance: 100,
         allianceRaw: allianceAvg.daily_merit,
+        median: normalize(allianceMedian.daily_merit, allianceAvg.daily_merit),
+        medianRaw: allianceMedian.daily_merit,
+      },
+      {
+        metric: '勢力值',
+        member: normalize(memberPower, allianceAvg.power),
+        memberRaw: memberPower,
+        alliance: 100,
+        allianceRaw: allianceAvg.power,
+        median: normalize(allianceMedian.power, allianceAvg.power),
+        medianRaw: allianceMedian.power,
       },
       {
         metric: '助攻',
@@ -227,6 +301,8 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
         memberRaw: memberAssist,
         alliance: 100,
         allianceRaw: allianceAvg.daily_assist,
+        median: normalize(allianceMedian.daily_assist, allianceAvg.daily_assist),
+        medianRaw: allianceMedian.daily_assist,
       },
       {
         metric: '捐獻',
@@ -234,43 +310,77 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
         memberRaw: memberDonation,
         alliance: 100,
         allianceRaw: allianceAvg.daily_donation,
+        median: normalize(allianceMedian.daily_donation, allianceAvg.daily_donation),
+        medianRaw: allianceMedian.daily_donation,
       },
     ]
-  }, [viewMode, latestPeriod, seasonSummary, allianceAvg])
+  }, [viewMode, latestPeriod, seasonSummary, allianceAvg, allianceMedian])
 
-  // Rank statistics
-  const rankStats = useMemo(() => {
-    const best = Math.min(...ranks)
-    const worst = Math.max(...ranks)
-    const avg = ranks.reduce((sum, r) => sum + r, 0) / ranks.length
-    return { best, worst, avg }
-  }, [ranks])
 
   return (
     <div className="space-y-6">
       {/* Current Status Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Contribution Rank - Primary Card */}
-        <Card className="md:col-span-2 border-primary/50">
+        {/* Contribution Rank */}
+        <Card className="border-primary/50">
           <CardHeader className="pb-2">
-            <CardDescription>貢獻排名（官方綜合指標）</CardDescription>
+            <CardDescription>貢獻排名</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-bold tabular-nums">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold tabular-nums">
                 #{viewMode === 'latest' ? latestPeriod.end_rank : seasonSummary.current_rank}
               </span>
-              <span className="text-muted-foreground">/ {totalMembers}人</span>
-              <div className="ml-auto">
-                <RankChangeIndicator
-                  change={viewMode === 'latest' ? latestPeriod.rank_change : seasonSummary.rank_change_season}
-                  size="lg"
-                />
-              </div>
+              <span className="text-sm text-muted-foreground">/ {totalMembers}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {viewMode === 'latest' ? '本期排名變化' : '賽季累計變化'}
-            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <RankChangeIndicator
+                change={viewMode === 'latest' ? latestPeriod.rank_change : seasonSummary.rank_change_season}
+                size="sm"
+              />
+              <span className="text-xs text-muted-foreground">
+                {viewMode === 'latest' ? '本期' : '賽季'}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Daily Merit */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>日均戰功</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {formatNumber(viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit)}
+            </div>
+            <div className="flex items-center gap-1 mt-1">
+              {calculatePercentDiff(
+                viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
+                allianceAvg.daily_merit
+              ) >= 0 ? (
+                <TrendingUp className="h-3 w-3 text-chart-2" />
+              ) : (
+                <TrendingDown className="h-3 w-3 text-destructive" />
+              )}
+              <span className={`text-xs ${
+                calculatePercentDiff(
+                  viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
+                  allianceAvg.daily_merit
+                ) >= 0
+                  ? 'text-chart-2'
+                  : 'text-destructive'
+              }`}>
+                {calculatePercentDiff(
+                  viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
+                  allianceAvg.daily_merit
+                ) >= 0 ? '+' : ''}
+                {calculatePercentDiff(
+                  viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
+                  allianceAvg.daily_merit
+                ).toFixed(1)}% vs 盟均
+              </span>
+            </div>
           </CardContent>
         </Card>
 
@@ -301,19 +411,19 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
           </CardContent>
         </Card>
 
-        {/* Daily Merit */}
+        {/* Daily Donation */}
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>日均戰功</CardDescription>
+            <CardDescription>日均捐獻</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tabular-nums">
-              {formatNumber(viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit)}
+              {formatNumber(viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation)}
             </div>
             <div className="flex items-center gap-1 mt-1">
               {calculatePercentDiff(
-                viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
-                allianceAvg.daily_merit
+                viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation,
+                allianceAvg.daily_donation
               ) >= 0 ? (
                 <TrendingUp className="h-3 w-3 text-primary" />
               ) : (
@@ -321,19 +431,19 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
               )}
               <span className={`text-xs ${
                 calculatePercentDiff(
-                  viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
-                  allianceAvg.daily_merit
+                  viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation,
+                  allianceAvg.daily_donation
                 ) >= 0
                   ? 'text-primary'
                   : 'text-destructive'
               }`}>
                 {calculatePercentDiff(
-                  viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
-                  allianceAvg.daily_merit
+                  viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation,
+                  allianceAvg.daily_donation
                 ) >= 0 ? '+' : ''}
                 {calculatePercentDiff(
-                  viewMode === 'latest' ? latestPeriod.daily_merit : seasonSummary.avg_daily_merit,
-                  allianceAvg.daily_merit
+                  viewMode === 'latest' ? latestPeriod.daily_donation : seasonSummary.avg_daily_donation,
+                  allianceAvg.daily_donation
                 ).toFixed(1)}% vs 盟均
               </span>
             </div>
@@ -343,11 +453,11 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
 
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Rank History Chart */}
+        {/* Rank & Merit History Chart (Dual Axis) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">貢獻排名趨勢</CardTitle>
-            <CardDescription>排名越低越好（越靠近頂部）</CardDescription>
+            <CardTitle className="text-base">貢獻排名與戰功趨勢</CardTitle>
+            <CardDescription>排名越低越好（左軸），戰功越高越好（右軸）</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={rankChartConfig} className="h-[280px] w-full">
@@ -362,7 +472,10 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                   ticks={xAxisTicks}
                   tickFormatter={formatDateLabel}
                 />
+                {/* Left Y Axis: Rank (reversed - lower is better) */}
                 <YAxis
+                  yAxisId="left"
+                  orientation="left"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
@@ -370,6 +483,16 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                   reversed
                   domain={yAxisDomain}
                   tickFormatter={(value) => `#${value}`}
+                />
+                {/* Right Y Axis: Daily Merit */}
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  className="text-xs"
+                  tickFormatter={(value) => formatNumberCompact(value)}
                 />
                 <ChartTooltip
                   content={({ active, payload }) => {
@@ -379,15 +502,31 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
                         <div className="font-medium">{data.dateLabel}</div>
                         <div className="text-xs text-muted-foreground mb-1">Period {data.periodNumber}</div>
-                        <div className="text-sm">排名: #{data.endRank}</div>
+                        <div className="text-sm" style={{ color: 'var(--chart-2)' }}>排名: #{data.endRank}</div>
+                        <div className="text-sm text-primary">
+                          日均戰功: {formatNumber(data.dailyMerit)}
+                        </div>
                       </div>
                     )
                   }}
                 />
-                <ReferenceLine y={1} stroke="var(--muted-foreground)" strokeDasharray="3 3" />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                <ReferenceLine yAxisId="left" y={1} stroke="var(--muted-foreground)" strokeDasharray="3 3" />
                 <Line
+                  yAxisId="left"
                   type="stepAfter"
                   dataKey="endRank"
+                  name="排名"
+                  stroke="var(--chart-2)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 5, fill: 'var(--chart-2)' }}
+                />
+                <Line
+                  yAxisId="right"
+                  type="stepAfter"
+                  dataKey="dailyMerit"
+                  name="日均戰功"
                   stroke="var(--primary)"
                   strokeWidth={2}
                   dot={false}
@@ -395,22 +534,6 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                 />
               </LineChart>
             </ChartContainer>
-
-            {/* Rank Stats */}
-            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t">
-              <div className="text-center">
-                <div className="text-sm text-muted-foreground">最佳</div>
-                <div className="text-lg font-bold text-primary">#{rankStats.best}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-sm text-muted-foreground">平均</div>
-                <div className="text-lg font-bold">#{rankStats.avg.toFixed(0)}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-sm text-muted-foreground">最差</div>
-                <div className="text-lg font-bold text-destructive">#{rankStats.worst}</div>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
@@ -418,7 +541,7 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
         <Card>
           <CardHeader>
             <CardTitle className="text-base">四維能力圖</CardTitle>
-            <CardDescription>成員日均表現 vs 同盟平均（100% = 同盟平均）</CardDescription>
+            <CardDescription>成員日均表現 vs 同盟平均/中位數（100% = 同盟平均）</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={radarChartConfig} className="mx-auto aspect-square max-h-[280px]">
@@ -427,7 +550,7 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                 <PolarAngleAxis dataKey="metric" className="text-xs" tick={{ fill: 'var(--foreground)', fontSize: 12 }} />
                 <PolarRadiusAxis
                   angle={90}
-                  domain={[0, Math.max(150, ...radarData.map((d) => d.member))]}
+                  domain={[0, Math.max(150, ...radarData.map((d) => Math.max(d.member, d.median)))]}
                   tick={{ fontSize: 10 }}
                   tickFormatter={(value) => `${value}%`}
                 />
@@ -436,9 +559,18 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                   dataKey="alliance"
                   stroke="var(--muted-foreground)"
                   fill="var(--muted-foreground)"
-                  fillOpacity={0.15}
+                  fillOpacity={0.1}
                   strokeWidth={1}
                   strokeDasharray="4 4"
+                />
+                <Radar
+                  name="同盟中位數"
+                  dataKey="median"
+                  stroke={MEDIAN_LINE_COLOR}
+                  fill={MEDIAN_LINE_COLOR}
+                  fillOpacity={0.08}
+                  strokeWidth={1}
+                  strokeDasharray="2 2"
                 />
                 <Radar
                   name={memberName}
@@ -457,6 +589,8 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                       memberRaw: number
                       alliance: number
                       allianceRaw: number
+                      median: number
+                      medianRaw: number
                     }
                     return (
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
@@ -466,6 +600,9 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, viewMode, totalMe
                         </div>
                         <div className="text-sm text-muted-foreground">
                           同盟平均：{formatNumberCompact(data.allianceRaw)} ({data.alliance}%)
+                        </div>
+                        <div className="text-sm" style={{ color: MEDIAN_LINE_COLOR }}>
+                          同盟中位數：{formatNumberCompact(data.medianRaw)} ({data.median}%)
                         </div>
                       </div>
                     )
@@ -489,6 +626,7 @@ interface CombatTabProps {
   readonly periodData: readonly MemberTrendItem[]
   readonly seasonSummary: SeasonSummaryResponse
   readonly allianceAvg: AllianceAverage
+  readonly allianceMedian: AllianceMedian
   readonly viewMode: ViewMode
 }
 
@@ -496,19 +634,7 @@ function CombatTab({ periodData, seasonSummary, allianceAvg, viewMode }: CombatT
   const latestPeriod = periodData[periodData.length - 1]
 
   // Expand period data to daily for date-based X axis
-  const dailyData = useMemo(
-    () =>
-      expandPeriodsToDaily(periodData, (p) => ({
-        dailyMerit: p.daily_merit,
-        dailyAssist: p.daily_assist,
-        dailyDonation: p.daily_donation,
-        endRank: p.end_rank,
-        endPower: p.end_power,
-        allianceAvgMerit: p.alliance_avg_merit,
-        allianceAvgAssist: p.alliance_avg_assist,
-      })),
-    [periodData]
-  )
+  const dailyData = useMemo(() => createDailyChartData(periodData), [periodData])
   const xAxisTicks = useMemo(() => getPeriodBoundaryTicks(periodData), [periodData])
 
   // Get values based on view mode
@@ -585,6 +711,7 @@ function CombatTab({ periodData, seasonSummary, allianceAvg, viewMode }: CombatT
                           <div className="font-medium">{data.dateLabel}</div>
                           <div className="text-sm">日均戰功: {formatNumber(data.dailyMerit)}</div>
                           <div className="text-sm text-muted-foreground">同盟平均: {formatNumber(data.allianceAvgMerit)}</div>
+                          <div className="text-sm" style={{ color: MEDIAN_LINE_COLOR }}>同盟中位數: {formatNumber(data.allianceMedianMerit)}</div>
                         </div>
                       )
                     }}
@@ -606,6 +733,15 @@ function CombatTab({ periodData, seasonSummary, allianceAvg, viewMode }: CombatT
                     stroke="var(--muted-foreground)"
                     strokeWidth={1}
                     strokeDasharray="5 5"
+                    dot={false}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="allianceMedianMerit"
+                    name="同盟中位數"
+                    stroke={MEDIAN_LINE_COLOR}
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
                     dot={false}
                   />
                 </LineChart>
@@ -678,6 +814,7 @@ function CombatTab({ periodData, seasonSummary, allianceAvg, viewMode }: CombatT
                           <div className="font-medium">{data.dateLabel}</div>
                           <div className="text-sm">日均助攻: {formatNumber(data.dailyAssist)}</div>
                           <div className="text-sm text-muted-foreground">同盟平均: {formatNumber(data.allianceAvgAssist)}</div>
+                          <div className="text-sm" style={{ color: MEDIAN_LINE_COLOR }}>同盟中位數: {formatNumber(data.allianceMedianAssist)}</div>
                         </div>
                       )
                     }}
@@ -699,6 +836,15 @@ function CombatTab({ periodData, seasonSummary, allianceAvg, viewMode }: CombatT
                     stroke="var(--muted-foreground)"
                     strokeWidth={1}
                     strokeDasharray="5 5"
+                    dot={false}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="allianceMedianAssist"
+                    name="同盟中位數"
+                    stroke={MEDIAN_LINE_COLOR}
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
                     dot={false}
                   />
                 </LineChart>
@@ -768,25 +914,22 @@ function CombatTab({ periodData, seasonSummary, allianceAvg, viewMode }: CombatT
 interface PowerDonationTabProps {
   readonly periodData: readonly MemberTrendItem[]
   readonly seasonSummary: SeasonSummaryResponse
+  readonly allianceAvg: AllianceAverage
+  readonly allianceMedian: AllianceMedian
 }
 
-function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) {
+function PowerDonationTab({ periodData, seasonSummary, allianceAvg }: PowerDonationTabProps) {
   const latestPeriod = periodData[periodData.length - 1]
 
   // Expand period data to daily for date-based X axis
-  const dailyData = useMemo(
-    () =>
-      expandPeriodsToDaily(periodData, (p) => ({
-        dailyDonation: p.daily_donation,
-        endPower: p.end_power,
-      })),
-    [periodData]
-  )
+  const dailyData = useMemo(() => createDailyChartData(periodData), [periodData])
   const xAxisTicks = useMemo(() => getPeriodBoundaryTicks(periodData), [periodData])
 
-  // Calculate totals
+  // Calculate totals and diffs
   const totalDonation = periodData.reduce((sum, d) => sum + d.donation_diff, 0)
   const powerChange = seasonSummary.total_power_change
+  const powerDiff = calculatePercentDiff(latestPeriod.end_power, allianceAvg.power)
+  const donationDiff = calculatePercentDiff(seasonSummary.avg_daily_donation, allianceAvg.daily_donation)
 
   return (
     <div className="space-y-4">
@@ -803,15 +946,27 @@ function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) 
                   {formatNumber(latestPeriod.end_power)}
                 </span>
               </div>
-              <div className="flex items-center gap-1 mt-2">
-                {powerChange >= 0 ? (
-                  <TrendingUp className="h-3 w-3 text-primary" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-destructive" />
-                )}
-                <span className={`text-xs ${powerChange >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                  {powerChange >= 0 ? '+' : ''}{formatNumber(powerChange)} 賽季累計
-                </span>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-1">
+                  {powerChange >= 0 ? (
+                    <TrendingUp className="h-3 w-3 text-primary" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-destructive" />
+                  )}
+                  <span className={`text-xs ${powerChange >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                    {powerChange >= 0 ? '+' : ''}{formatNumber(powerChange)} 賽季
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {powerDiff >= 0 ? (
+                    <TrendingUp className="h-3 w-3 text-primary" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-destructive" />
+                  )}
+                  <span className={`text-xs ${powerDiff >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                    {powerDiff >= 0 ? '+' : ''}{powerDiff.toFixed(1)}% vs 盟均
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -849,10 +1004,13 @@ function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) 
                         <div className="rounded-lg border bg-background p-2 shadow-sm">
                           <div className="font-medium">{data.dateLabel}</div>
                           <div className="text-sm">勢力值: {formatNumber(data.endPower)}</div>
+                          <div className="text-sm text-muted-foreground">同盟平均: {formatNumber(data.allianceAvgPower)}</div>
+                          <div className="text-sm" style={{ color: MEDIAN_LINE_COLOR }}>同盟中位數: {formatNumber(data.allianceMedianPower)}</div>
                         </div>
                       )
                     }}
                   />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Line
                     type="stepAfter"
                     dataKey="endPower"
@@ -861,6 +1019,24 @@ function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) 
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4 }}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="allianceAvgPower"
+                    name="同盟平均"
+                    stroke="var(--muted-foreground)"
+                    strokeWidth={1}
+                    strokeDasharray="5 5"
+                    dot={false}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="allianceMedianPower"
+                    name="同盟中位數"
+                    stroke={MEDIAN_LINE_COLOR}
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
+                    dot={false}
                   />
                 </LineChart>
               </ChartContainer>
@@ -880,10 +1056,20 @@ function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) 
                   {formatNumber(totalDonation)}
                 </span>
               </div>
-              <div className="flex items-center gap-1 mt-2">
+              <div className="flex items-center gap-3 mt-2">
                 <span className="text-xs text-muted-foreground">
                   日均: {formatNumber(seasonSummary.avg_daily_donation)}/日
                 </span>
+                <div className="flex items-center gap-1">
+                  {donationDiff >= 0 ? (
+                    <TrendingUp className="h-3 w-3 text-primary" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-destructive" />
+                  )}
+                  <span className={`text-xs ${donationDiff >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                    {donationDiff >= 0 ? '+' : ''}{donationDiff.toFixed(1)}% vs 盟均
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -921,10 +1107,13 @@ function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) 
                         <div className="rounded-lg border bg-background p-2 shadow-sm">
                           <div className="font-medium">{data.dateLabel}</div>
                           <div className="text-sm">日均捐獻: {formatNumber(data.dailyDonation)}</div>
+                          <div className="text-sm text-muted-foreground">同盟平均: {formatNumber(data.allianceAvgDonation)}</div>
+                          <div className="text-sm" style={{ color: MEDIAN_LINE_COLOR }}>同盟中位數: {formatNumber(data.allianceMedianDonation)}</div>
                         </div>
                       )
                     }}
                   />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Line
                     type="stepAfter"
                     dataKey="dailyDonation"
@@ -933,6 +1122,24 @@ function PowerDonationTab({ periodData, seasonSummary }: PowerDonationTabProps) 
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4 }}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="allianceAvgDonation"
+                    name="同盟平均"
+                    stroke="var(--muted-foreground)"
+                    strokeWidth={1}
+                    strokeDasharray="5 5"
+                    dot={false}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="allianceMedianDonation"
+                    name="同盟中位數"
+                    stroke={MEDIAN_LINE_COLOR}
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
+                    dot={false}
                   />
                 </LineChart>
               </ChartContainer>
@@ -1085,6 +1292,25 @@ function MemberPerformance() {
     }
   }, [trendData])
 
+  // Calculate alliance medians from latest trend period
+  const allianceMedian: AllianceMedian = useMemo(() => {
+    if (!trendData || trendData.length === 0) {
+      return {
+        daily_merit: 0,
+        daily_assist: 0,
+        daily_donation: 0,
+        power: 0,
+      }
+    }
+    const latest = trendData[trendData.length - 1]
+    return {
+      daily_merit: latest.alliance_median_merit,
+      daily_assist: latest.alliance_median_assist,
+      daily_donation: latest.alliance_median_donation,
+      power: latest.alliance_median_power,
+    }
+  }, [trendData])
+
   // Get total members from latest trend data
   const totalMembers = useMemo(() => {
     if (!trendData || trendData.length === 0) return 0
@@ -1223,6 +1449,7 @@ function MemberPerformance() {
                 periodData={trendData}
                 seasonSummary={seasonSummary}
                 allianceAvg={allianceAvg}
+                allianceMedian={allianceMedian}
                 viewMode={viewMode}
                 totalMembers={totalMembers}
                 memberName={selectedMember?.name ?? '成員'}
@@ -1234,6 +1461,7 @@ function MemberPerformance() {
                 periodData={trendData}
                 seasonSummary={seasonSummary}
                 allianceAvg={allianceAvg}
+                allianceMedian={allianceMedian}
                 viewMode={viewMode}
               />
             </TabsContent>
@@ -1242,6 +1470,8 @@ function MemberPerformance() {
               <PowerDonationTab
                 periodData={trendData}
                 seasonSummary={seasonSummary}
+                allianceAvg={allianceAvg}
+                allianceMedian={allianceMedian}
               />
             </TabsContent>
           </Tabs>

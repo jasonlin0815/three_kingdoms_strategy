@@ -167,6 +167,12 @@ class AnalyticsService:
                 "alliance_avg_donation": period_avg.get("avg_daily_donation", 0),
                 "alliance_avg_power": period_avg.get("avg_power", 0),
                 "alliance_member_count": period_avg.get("member_count", 0),
+                # Alliance medians for comparison
+                "alliance_median_contribution": period_avg.get("median_daily_contribution", 0),
+                "alliance_median_merit": period_avg.get("median_daily_merit", 0),
+                "alliance_median_assist": period_avg.get("median_daily_assist", 0),
+                "alliance_median_donation": period_avg.get("median_daily_donation", 0),
+                "alliance_median_power": period_avg.get("median_power", 0),
             })
 
         # Sort by period_number
@@ -175,14 +181,16 @@ class AnalyticsService:
 
     async def get_period_alliance_averages(self, period_id: UUID) -> dict:
         """
-        Calculate alliance average metrics for a specific period.
+        Calculate alliance average and median metrics for a specific period.
 
         Args:
             period_id: Period UUID
 
         Returns:
-            Dict with average daily metrics and member count
+            Dict with average and median daily metrics and member count
         """
+        from statistics import median
+
         metrics = await self._metrics_repo.get_by_period(period_id)
 
         if not metrics:
@@ -192,35 +200,49 @@ class AnalyticsService:
                 "avg_daily_merit": 0,
                 "avg_daily_assist": 0,
                 "avg_daily_donation": 0,
+                "median_daily_contribution": 0,
+                "median_daily_merit": 0,
+                "median_daily_assist": 0,
+                "median_daily_donation": 0,
             }
 
         count = len(metrics)
-        total_contribution = sum(float(m.daily_contribution) for m in metrics)
-        total_merit = sum(float(m.daily_merit) for m in metrics)
-        total_assist = sum(float(m.daily_assist) for m in metrics)
-        total_donation = sum(float(m.daily_donation) for m in metrics)
+
+        # Extract values for calculations
+        contributions = [float(m.daily_contribution) for m in metrics]
+        merits = [float(m.daily_merit) for m in metrics]
+        assists = [float(m.daily_assist) for m in metrics]
+        donations = [float(m.daily_donation) for m in metrics]
 
         return {
             "member_count": count,
-            "avg_daily_contribution": round(total_contribution / count, 2),
-            "avg_daily_merit": round(total_merit / count, 2),
-            "avg_daily_assist": round(total_assist / count, 2),
-            "avg_daily_donation": round(total_donation / count, 2),
+            # Averages
+            "avg_daily_contribution": round(sum(contributions) / count, 2),
+            "avg_daily_merit": round(sum(merits) / count, 2),
+            "avg_daily_assist": round(sum(assists) / count, 2),
+            "avg_daily_donation": round(sum(donations) / count, 2),
+            # Medians
+            "median_daily_contribution": round(median(contributions), 2),
+            "median_daily_merit": round(median(merits), 2),
+            "median_daily_assist": round(median(assists), 2),
+            "median_daily_donation": round(median(donations), 2),
         }
 
     async def get_member_with_comparison(
         self, member_id: UUID, period_id: UUID
     ) -> dict | None:
         """
-        Get member metrics for a period with alliance averages for comparison.
+        Get member metrics for a period with alliance averages and medians for comparison.
 
         Args:
             member_id: Member UUID
             period_id: Period UUID
 
         Returns:
-            Dict with member metrics and alliance averages, or None if not found
+            Dict with member metrics, alliance averages, and medians, or None if not found
         """
+        from statistics import median
+
         # Get all metrics for this period
         all_metrics = await self._metrics_repo.get_by_period(period_id)
 
@@ -237,12 +259,12 @@ class AnalyticsService:
         if not member_metrics:
             return None
 
-        # Calculate alliance averages
+        # Extract values for calculations
         count = len(all_metrics)
-        avg_contribution = sum(float(m.daily_contribution) for m in all_metrics) / count
-        avg_merit = sum(float(m.daily_merit) for m in all_metrics) / count
-        avg_assist = sum(float(m.daily_assist) for m in all_metrics) / count
-        avg_donation = sum(float(m.daily_donation) for m in all_metrics) / count
+        contributions = [float(m.daily_contribution) for m in all_metrics]
+        merits = [float(m.daily_merit) for m in all_metrics]
+        assists = [float(m.daily_assist) for m in all_metrics]
+        donations = [float(m.daily_donation) for m in all_metrics]
 
         return {
             "member": {
@@ -257,10 +279,16 @@ class AnalyticsService:
                 "is_new_member": member_metrics.is_new_member,
             },
             "alliance_avg": {
-                "daily_contribution": round(avg_contribution, 2),
-                "daily_merit": round(avg_merit, 2),
-                "daily_assist": round(avg_assist, 2),
-                "daily_donation": round(avg_donation, 2),
+                "daily_contribution": round(sum(contributions) / count, 2),
+                "daily_merit": round(sum(merits) / count, 2),
+                "daily_assist": round(sum(assists) / count, 2),
+                "daily_donation": round(sum(donations) / count, 2),
+            },
+            "alliance_median": {
+                "daily_contribution": round(median(contributions), 2),
+                "daily_merit": round(median(merits), 2),
+                "daily_assist": round(median(assists), 2),
+                "daily_donation": round(median(donations), 2),
             },
             "total_members": count,
         }

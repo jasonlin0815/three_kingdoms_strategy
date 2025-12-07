@@ -71,6 +71,13 @@ class MemberTrendItem(BaseModel):
     alliance_avg_power: float = Field(0, description="Alliance avg power")
     alliance_member_count: int = Field(0, description="Total members in alliance for this period")
 
+    # Alliance medians for comparison
+    alliance_median_contribution: float = Field(0, description="Alliance median daily contribution")
+    alliance_median_merit: float = Field(0, description="Alliance median daily merit")
+    alliance_median_assist: float = Field(0, description="Alliance median daily assist")
+    alliance_median_donation: float = Field(0, description="Alliance median daily donation")
+    alliance_median_power: float = Field(0, description="Alliance median power")
+
 
 class SeasonSummaryResponse(BaseModel):
     """Season-to-date summary for a member"""
@@ -103,15 +110,21 @@ class SeasonSummaryResponse(BaseModel):
 
 
 class AllianceAveragesResponse(BaseModel):
-    """Alliance-wide average metrics for a period"""
+    """Alliance-wide average and median metrics for a period"""
 
     model_config = ConfigDict(from_attributes=True)
 
     member_count: int = Field(..., ge=0, description="Number of members included")
+    # Averages
     avg_daily_contribution: float = Field(..., ge=0, description="Average daily contribution")
     avg_daily_merit: float = Field(..., ge=0, description="Average daily merit")
     avg_daily_assist: float = Field(..., ge=0, description="Average daily assist")
     avg_daily_donation: float = Field(..., ge=0, description="Average daily donation")
+    # Medians
+    median_daily_contribution: float = Field(0, ge=0, description="Median daily contribution")
+    median_daily_merit: float = Field(0, ge=0, description="Median daily merit")
+    median_daily_assist: float = Field(0, ge=0, description="Median daily assist")
+    median_daily_donation: float = Field(0, ge=0, description="Median daily donation")
 
 
 class AllianceTrendItem(BaseModel):
@@ -156,11 +169,23 @@ class AllianceMetricsAverage(BaseModel):
     daily_donation: float = Field(..., ge=0)
 
 
+class AllianceMetricsMedian(BaseModel):
+    """Alliance median metrics for comparison"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    daily_contribution: float = Field(..., ge=0)
+    daily_merit: float = Field(..., ge=0)
+    daily_assist: float = Field(..., ge=0)
+    daily_donation: float = Field(..., ge=0)
+
+
 class MemberComparisonResponse(BaseModel):
-    """Member metrics with alliance averages for comparison"""
+    """Member metrics with alliance averages and medians for comparison"""
 
     model_config = ConfigDict(from_attributes=True)
 
     member: MemberMetricsSnapshot = Field(..., description="Member's metrics")
     alliance_avg: AllianceMetricsAverage = Field(..., description="Alliance averages")
+    alliance_median: AllianceMetricsMedian = Field(..., description="Alliance medians")
     total_members: int = Field(..., ge=0, description="Total members in comparison")

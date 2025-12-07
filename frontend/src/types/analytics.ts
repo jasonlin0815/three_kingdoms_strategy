@@ -59,6 +59,13 @@ export interface MemberTrendItem {
   readonly alliance_avg_donation: number
   readonly alliance_avg_power: number
   readonly alliance_member_count: number
+
+  // Alliance medians for comparison
+  readonly alliance_median_contribution: number
+  readonly alliance_median_merit: number
+  readonly alliance_median_assist: number
+  readonly alliance_median_donation: number
+  readonly alliance_median_power: number
 }
 
 /**
@@ -91,14 +98,20 @@ export interface SeasonSummaryResponse {
 }
 
 /**
- * Alliance-wide average metrics for a period
+ * Alliance-wide average and median metrics for a period
  */
 export interface AllianceAveragesResponse {
   readonly member_count: number
+  // Averages
   readonly avg_daily_contribution: number
   readonly avg_daily_merit: number
   readonly avg_daily_assist: number
   readonly avg_daily_donation: number
+  // Medians
+  readonly median_daily_contribution: number
+  readonly median_daily_merit: number
+  readonly median_daily_assist: number
+  readonly median_daily_donation: number
 }
 
 /**

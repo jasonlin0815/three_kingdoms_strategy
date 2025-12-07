@@ -1415,17 +1415,17 @@ export function useGroupMemberRanks(groupName: string, seasonId: string) {
 
 ### 10.1 成員表現頁面（MemberPerformance）
 
-**狀態**: ✅ 前端 Mock Data 完成，待確認設計後實作後端
+**狀態**: ✅ **已完成** - 前後端整合完畢
 
-**檔案位置**: `frontend/src/pages/MemberPerformance.tsx`
+**檔案位置**: `frontend/src/pages/MemberPerformance.tsx` (1465 行)
 
 #### Tab 結構
 
 | Tab | 名稱 | 內容 | 狀態 |
 |-----|------|------|------|
-| 1 | 總覽 | 貢獻排名（官方綜合指標）、排名趨勢、四維雷達圖 | ✅ Mock 完成 |
-| 2 | 戰功與助攻 | 日均戰功趨勢（主要）、助攻趨勢（次要） | ✅ Mock 完成 |
-| 3 | 勢力值與捐獻 | 勢力值趨勢、捐獻趨勢、期間明細表 | ✅ Mock 完成 |
+| 1 | 總覽 | 貢獻排名（官方綜合指標）、排名趨勢、四維雷達圖 | ✅ 已完成 |
+| 2 | 戰功與助攻 | 日均戰功趨勢（主要）、助攻趨勢（次要） | ✅ 已完成 |
+| 3 | 勢力值與捐獻 | 勢力值趨勢、捐獻趨勢、期間明細表 | ✅ 已完成 |
 
 #### 關鍵設計決策：日期 X 軸
 
@@ -1476,45 +1476,62 @@ interface DailyDataPoint {
 
 ### 10.2 後端 API 進度
 
-**狀態**: 🟡 基礎結構已建立，待前端確認後完善
+**狀態**: ✅ **核心 API 已完成**
 
 **已建立的檔案**:
-- `backend/src/services/analytics_service.py` - 基礎服務
-- `backend/src/api/v1/endpoints/analytics.py` - API 端點
+- `backend/src/services/analytics_service.py` - 分析服務
+- `backend/src/services/period_metrics_service.py` - 期間指標服務
+- `backend/src/api/v1/endpoints/analytics.py` - Analytics API
+- `backend/src/api/v1/endpoints/periods.py` - Period API
+- `backend/src/repositories/member_period_metrics_repository.py` - 指標資料存取
 
 **已實作的 Endpoints**:
 
 | Endpoint | 方法 | 狀態 |
 |----------|------|------|
-| `/api/v1/analytics/members` | GET | ✅ 已實作 |
-| `/api/v1/analytics/members/{member_id}/trend` | GET | ✅ 已實作 |
-| `/api/v1/analytics/members/{member_id}/summary` | GET | ✅ 已實作 |
-| `/api/v1/analytics/members/{member_id}/comparison` | GET | ✅ 已實作 |
-| `/api/v1/analytics/periods/{period_id}/averages` | GET | ✅ 已實作 |
-| `/api/v1/analytics/alliance/trend` | GET | ✅ 已實作 |
+| `/api/v1/analytics/members` | GET | ✅ 已完成 |
+| `/api/v1/analytics/members/{member_id}/trend` | GET | ✅ 已完成 |
+| `/api/v1/analytics/members/{member_id}/summary` | GET | ✅ 已完成 |
+| `/api/v1/analytics/members/{member_id}/comparison` | GET | ✅ 已完成 |
+| `/api/v1/analytics/periods/{period_id}/averages` | GET | ✅ 已完成 |
+| `/api/v1/analytics/alliance/trend` | GET | ✅ 已完成 |
+| `/api/v1/periods` | GET | ✅ 已完成 |
 
 **待實作**:
-- 組別分析相關 API（Phase 2）
-- 分佈統計 API（Box Plot 等）
+- 組別分佈統計 API（Box Plot / 健康度雷達）
+- 組別貢獻佔比趨勢 API
 
-### 10.3 待辦事項
+### 10.3 已完成項目
 
-#### 近期（確認設計後）
+#### Phase 1: 個人分析 ✅
 
-- [ ] 確認前端圖表設計是否符合需求
-- [ ] 將 mock data 替換為真實 API 呼叫
-- [ ] 建立 TanStack Query hooks
-- [ ] 完善後端 API 錯誤處理
+- [x] 確認前端圖表設計是否符合需求
+- [x] 將 mock data 替換為真實 API 呼叫
+- [x] 建立 TanStack Query hooks (`use-analytics.ts`)
+- [x] 完善後端 API 錯誤處理
+- [x] 成員趨勢圖（Line Chart）
+- [x] 排名歷史圖（Inverted Line）
+- [x] 四維雷達圖（Radar Chart）
+- [x] 同盟平均對比
 
-#### 中期（Phase 2）
+#### Phase 2: 組別分析 ✅
 
-- [ ] 實作組別分析頁面
-- [ ] Box Plot 組件
-- [ ] 貢獻層級堆疊圖
+- [x] 實作組別分析頁面 (`GroupAnalytics.tsx`)
+- [x] 組別對比圖表
+- [x] 成員排行表格
+
+### 10.4 待辦事項
+
+#### 優化項目
+
+- [ ] 組別分佈統計 API（Box Plot / 健康度雷達）
+- [ ] 組別貢獻佔比趨勢 API
+- [ ] Overview Dashboard 整合
+- [ ] 進階互動功能（點擊跳轉）
 
 ---
 
 **Last Updated**: 2025-12-07
-**Status**: Frontend Mock Complete - Pending Design Confirmation
+**Status**: Phase 4 Complete - Member & Group Analytics Implemented
 **Author**: AI Assistant + Product Owner
-**Version**: 2.1 (Member Performance Implementation)
+**Version**: 2.2 (Analytics Implementation Complete)

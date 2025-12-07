@@ -165,13 +165,13 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
         self, period_ids: list[UUID]
     ) -> dict[UUID, dict]:
         """
-        Get alliance average metrics for multiple periods in one query.
+        Get alliance average and median metrics for multiple periods in one query.
 
         Args:
             period_ids: List of Period UUIDs
 
         Returns:
-            Dict mapping period_id to average metrics
+            Dict mapping period_id to average and median metrics
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
@@ -180,6 +180,7 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
 
         from collections import defaultdict
         from decimal import Decimal
+        from statistics import median
 
         # Query all metrics for these periods
         result = (
@@ -191,7 +192,7 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
 
         data = self._handle_supabase_result(result, allow_empty=True)
 
-        # Group by period_id and calculate averages
+        # Group by period_id and calculate averages and medians
         period_metrics: dict[str, list[dict]] = defaultdict(list)
         for row in data:
             period_metrics[row["period_id"]].append(row)
@@ -203,23 +204,28 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
                 continue
 
             period_uuid = UUID(period_id_str)
+
+            # Extract values for median calculation
+            contributions = [float(Decimal(str(m["daily_contribution"]))) for m in metrics_list]
+            merits = [float(Decimal(str(m["daily_merit"]))) for m in metrics_list]
+            assists = [float(Decimal(str(m["daily_assist"]))) for m in metrics_list]
+            donations = [float(Decimal(str(m["daily_donation"]))) for m in metrics_list]
+            powers = [float(Decimal(str(m["end_power"]))) for m in metrics_list]
+
             averages[period_uuid] = {
                 "member_count": count,
-                "avg_daily_contribution": float(
-                    sum(Decimal(str(m["daily_contribution"])) for m in metrics_list) / count
-                ),
-                "avg_daily_merit": float(
-                    sum(Decimal(str(m["daily_merit"])) for m in metrics_list) / count
-                ),
-                "avg_daily_assist": float(
-                    sum(Decimal(str(m["daily_assist"])) for m in metrics_list) / count
-                ),
-                "avg_daily_donation": float(
-                    sum(Decimal(str(m["daily_donation"])) for m in metrics_list) / count
-                ),
-                "avg_power": float(
-                    sum(Decimal(str(m["end_power"])) for m in metrics_list) / count
-                ),
+                # Averages
+                "avg_daily_contribution": sum(contributions) / count,
+                "avg_daily_merit": sum(merits) / count,
+                "avg_daily_assist": sum(assists) / count,
+                "avg_daily_donation": sum(donations) / count,
+                "avg_power": sum(powers) / count,
+                # Medians
+                "median_daily_contribution": median(contributions),
+                "median_daily_merit": median(merits),
+                "median_daily_assist": median(assists),
+                "median_daily_donation": median(donations),
+                "median_power": median(powers),
             }
 
         return averages
