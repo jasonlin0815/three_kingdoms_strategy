@@ -132,3 +132,150 @@ export function getPeriodBoundaryTicks<T extends PeriodData>(periods: readonly T
 
   return ticks
 }
+
+// =============================================================================
+// Distribution Bin Utilities
+// =============================================================================
+
+/**
+ * Format a number using 萬 (10,000) units for Chinese readability.
+ * Examples: 50000 -> "5萬", 15000 -> "1.5萬", 500 -> "500"
+ */
+export function formatWan(value: number): string {
+  if (value === 0) return '0'
+  if (value >= 10000) {
+    const wan = value / 10000
+    return Number.isInteger(wan) ? `${wan}萬` : `${wan.toFixed(1)}萬`
+  }
+  return value.toLocaleString()
+}
+
+/**
+ * Select a "nice" step size for histogram bins.
+ * Aims for 5-8 bins with round numbers in 萬 units for readability.
+ *
+ * @param maxValue - Maximum value in the dataset
+ * @param niceSteps - Optional array of preferred step sizes (defaults to common values)
+ * @param targetBins - Target number of bins (default 6)
+ */
+export function selectNiceStep(
+  maxValue: number,
+  niceSteps: readonly number[] = [5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000],
+  targetBins: number = 6
+): number {
+  // Find step that produces closest to target bin count
+  for (const step of niceSteps) {
+    const binCount = Math.ceil(maxValue / step)
+    if (binCount >= 4 && binCount <= 8) return step
+  }
+
+  // Fallback: calculate based on magnitude
+  const rawStep = maxValue / targetBins
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)))
+  const normalized = rawStep / magnitude
+  const niceNormalized = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+  return niceNormalized * magnitude
+}
+
+/**
+ * Distribution bin for histogram display.
+ */
+export interface DistributionBin {
+  readonly range: string
+  readonly label: string
+  readonly min: number
+  readonly max: number
+  readonly count: number
+  readonly percentage: number
+}
+
+/**
+ * Calculate distribution bins for a collection of items.
+ * Creates a histogram with dynamic "nice" bin boundaries.
+ *
+ * Special handling:
+ * - First bin is always "0" for inactive/zero-value items
+ * - Uses formatWan for readable Chinese number labels
+ * - Single pass O(n) counting for performance
+ *
+ * @param items - Array of items to bin
+ * @param getValue - Function to extract the numeric value from each item
+ * @param niceSteps - Optional preferred step sizes for bin boundaries
+ */
+export function calculateDistributionBins<T>(
+  items: readonly T[],
+  getValue: (item: T) => number,
+  niceSteps?: readonly number[]
+): DistributionBin[] {
+  if (items.length === 0) return []
+
+  const values = items.map(getValue)
+  const maxValue = Math.max(...values, 0)
+
+  // All items have zero value
+  if (maxValue === 0) {
+    return [{
+      range: '0',
+      label: '0',
+      min: 0,
+      max: Infinity,
+      count: items.length,
+      percentage: 100
+    }]
+  }
+
+  const step = selectNiceStep(maxValue, niceSteps)
+  const numRanges = Math.ceil(maxValue / step)
+
+  // Build bin definitions: first bin is always "0" (inactive/zero items)
+  interface BinDef {
+    min: number
+    max: number
+    label: string
+  }
+  const binDefs: BinDef[] = [{ min: 0, max: 0.01, label: '0' }]
+
+  for (let i = 0; i < numRanges; i++) {
+    const rangeMin = i * step + (i === 0 ? 0.01 : 0)
+    const rangeMax = (i + 1) * step
+    const isLast = i === numRanges - 1
+
+    let label: string
+    if (i === 0) {
+      label = `0-${formatWan(step)}`
+    } else if (isLast) {
+      label = `${formatWan(i * step)}+`
+    } else {
+      label = `${formatWan(i * step)}-${formatWan(rangeMax)}`
+    }
+
+    binDefs.push({
+      min: rangeMin,
+      max: isLast ? Infinity : rangeMax,
+      label,
+    })
+  }
+
+  // Count items in each bin (single pass for O(n) performance)
+  const total = items.length
+  const counts = new Array<number>(binDefs.length).fill(0)
+
+  for (const item of items) {
+    const value = getValue(item)
+    for (let i = 0; i < binDefs.length; i++) {
+      if (value >= binDefs[i].min && value < binDefs[i].max) {
+        counts[i]++
+        break
+      }
+    }
+  }
+
+  return binDefs.map((def, i) => ({
+    range: def.label,
+    label: def.label,
+    min: def.min,
+    max: def.max,
+    count: counts[i],
+    percentage: total > 0 ? Math.round((counts[i] / total) * 100) : 0,
+  }))
+}

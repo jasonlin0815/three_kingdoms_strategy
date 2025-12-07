@@ -110,16 +110,21 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
   }, [weights, syncWeightsToLocal])
 
   /**
-   * Auto-initialize weights if not exists AND season has CSV uploads (only once)
+   * Auto-initialize weights when CSV uploads exist but weights are missing
+   *
+   * Triggers when:
+   * - Season has CSV uploads
+   * - Number of uploads > number of weights (some uploads missing weights)
+   * - Not currently loading or initializing
    */
   useEffect(() => {
-    const hasUploads = uploads && uploads.length > 0
+    const uploadCount = uploads?.length || 0
+    const weightCount = weights?.length || 0
+    const hasMissingWeights = uploadCount > 0 && uploadCount > weightCount
     const shouldAutoInit =
-      hasUploads &&
+      hasMissingWeights &&
       !isLoadingWeights &&
-      (!weights || weights.length === 0) &&
       !initializeMutation.isPending &&
-      !initializeMutation.isSuccess &&
       !hasAttemptedInit
 
     if (shouldAutoInit) {
@@ -131,7 +136,7 @@ export const HegemonyWeightCard: React.FC<HegemonyWeightCardProps> = ({ season }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploads?.length, isLoadingWeights, weights?.length, initializeMutation.isPending, initializeMutation.isSuccess, hasAttemptedInit])
+  }, [uploads?.length, isLoadingWeights, weights?.length, initializeMutation.isPending, hasAttemptedInit])
 
   /**
    * Update Tier 1 weight (indicator weights)

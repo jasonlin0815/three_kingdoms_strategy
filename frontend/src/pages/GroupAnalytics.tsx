@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
+import { BoxPlot } from '@/components/analytics/BoxPlot'
 import {
   TrendingUp,
   TrendingDown,
@@ -63,6 +64,8 @@ import {
   expandPeriodsToDaily,
   getPeriodBoundaryTicks,
   formatDateLabel,
+  calculateDistributionBins,
+  type DistributionBin,
 } from '@/lib/chart-utils'
 import { useActiveSeason } from '@/hooks/use-seasons'
 import {
@@ -147,73 +150,22 @@ interface OverviewTabProps {
   readonly groupStats: GroupStats
   readonly allianceAverages: AllianceAveragesResponse
   readonly allGroupsData: readonly GroupComparisonItem[]
-  readonly periodTrends: readonly GroupTrendItem[]
-  readonly viewMode: ViewMode
 }
 
-function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends, viewMode }: OverviewTabProps) {
-
-  // Calculate season averages from period trends (for 'season' view mode)
-  // Uses member-day weighting: (sum of avg_metric * member_count * days) / (sum of member_count * days)
-  const seasonGroupAverages = useMemo(() => {
-    if (periodTrends.length === 0) {
-      return {
-        avg_daily_contribution: 0,
-        avg_daily_merit: 0,
-        avg_daily_assist: 0,
-        avg_daily_donation: 0,
-        avg_power: 0,
-        avg_rank: 0,
-      }
-    }
-
-    // Calculate weighted average based on member-days per period
-    let totalContribution = 0
-    let totalMerit = 0
-    let totalAssist = 0
-    let totalDonation = 0
-    let totalPower = 0
-    let totalRank = 0
-    let totalMemberDays = 0
-
-    for (const period of periodTrends) {
-      const memberDays = period.member_count * period.days
-      totalContribution += period.avg_contribution * memberDays
-      totalMerit += period.avg_merit * memberDays
-      totalAssist += period.avg_assist * memberDays
-      totalDonation += period.avg_donation * memberDays
-      totalPower += period.avg_power * memberDays
-      totalRank += period.avg_rank * memberDays
-      totalMemberDays += memberDays
-    }
-
-    return {
-      avg_daily_contribution: totalMemberDays > 0 ? totalContribution / totalMemberDays : 0,
-      avg_daily_merit: totalMemberDays > 0 ? totalMerit / totalMemberDays : 0,
-      avg_daily_assist: totalMemberDays > 0 ? totalAssist / totalMemberDays : 0,
-      avg_daily_donation: totalMemberDays > 0 ? totalDonation / totalMemberDays : 0,
-      avg_power: totalMemberDays > 0 ? totalPower / totalMemberDays : 0,
-      avg_rank: totalMemberDays > 0 ? totalRank / totalMemberDays : 0,
-    }
-  }, [periodTrends])
+function OverviewTab({ groupStats, allianceAverages, allGroupsData }: OverviewTabProps) {
+  // Note: groupStats already contains correct values based on viewMode
+  // Backend returns latest period data for 'latest' view, season-weighted data for 'season' view
+  // No need to calculate season averages on frontend - backend handles this
 
   // Capability radar data: normalized to alliance average (100 = alliance average)
-  // Uses viewMode for toggle between latest period and season average
   const radarData = useMemo(() => {
     const normalize = (value: number, avg: number) => (avg > 0 ? Math.round((value / avg) * 100) : 0)
-
-    // Select group values based on view mode
-    const groupContribution = viewMode === 'latest' ? groupStats.avg_daily_contribution : seasonGroupAverages.avg_daily_contribution
-    const groupMerit = viewMode === 'latest' ? groupStats.avg_daily_merit : seasonGroupAverages.avg_daily_merit
-    const groupAssist = viewMode === 'latest' ? groupStats.avg_daily_assist : seasonGroupAverages.avg_daily_assist
-    const groupDonation = viewMode === 'latest' ? groupStats.avg_daily_donation : seasonGroupAverages.avg_daily_donation
-    const groupPower = viewMode === 'latest' ? groupStats.avg_power : seasonGroupAverages.avg_power
 
     return [
       {
         metric: '貢獻',
-        group: normalize(groupContribution, allianceAverages.avg_daily_contribution),
-        groupRaw: groupContribution,
+        group: normalize(groupStats.avg_daily_contribution, allianceAverages.avg_daily_contribution),
+        groupRaw: groupStats.avg_daily_contribution,
         alliance: 100,
         allianceRaw: allianceAverages.avg_daily_contribution,
         median: normalize(allianceAverages.median_daily_contribution, allianceAverages.avg_daily_contribution),
@@ -221,8 +173,8 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
       },
       {
         metric: '戰功',
-        group: normalize(groupMerit, allianceAverages.avg_daily_merit),
-        groupRaw: groupMerit,
+        group: normalize(groupStats.avg_daily_merit, allianceAverages.avg_daily_merit),
+        groupRaw: groupStats.avg_daily_merit,
         alliance: 100,
         allianceRaw: allianceAverages.avg_daily_merit,
         median: normalize(allianceAverages.median_daily_merit, allianceAverages.avg_daily_merit),
@@ -230,8 +182,8 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
       },
       {
         metric: '勢力值',
-        group: normalize(groupPower, allianceAverages.avg_power),
-        groupRaw: groupPower,
+        group: normalize(groupStats.avg_power, allianceAverages.avg_power),
+        groupRaw: groupStats.avg_power,
         alliance: 100,
         allianceRaw: allianceAverages.avg_power,
         median: normalize(allianceAverages.median_power, allianceAverages.avg_power),
@@ -239,8 +191,8 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
       },
       {
         metric: '助攻',
-        group: normalize(groupAssist, allianceAverages.avg_daily_assist),
-        groupRaw: groupAssist,
+        group: normalize(groupStats.avg_daily_assist, allianceAverages.avg_daily_assist),
+        groupRaw: groupStats.avg_daily_assist,
         alliance: 100,
         allianceRaw: allianceAverages.avg_daily_assist,
         median: normalize(allianceAverages.median_daily_assist, allianceAverages.avg_daily_assist),
@@ -248,24 +200,19 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
       },
       {
         metric: '捐獻',
-        group: normalize(groupDonation, allianceAverages.avg_daily_donation),
-        groupRaw: groupDonation,
+        group: normalize(groupStats.avg_daily_donation, allianceAverages.avg_daily_donation),
+        groupRaw: groupStats.avg_daily_donation,
         alliance: 100,
         allianceRaw: allianceAverages.avg_daily_donation,
         median: normalize(allianceAverages.median_daily_donation, allianceAverages.avg_daily_donation),
         medianRaw: allianceAverages.median_daily_donation,
       },
     ]
-  }, [viewMode, groupStats, seasonGroupAverages, allianceAverages])
+  }, [groupStats, allianceAverages])
 
-  // Displayed values based on view mode
-  const displayContribution = viewMode === 'latest' ? groupStats.avg_daily_contribution : seasonGroupAverages.avg_daily_contribution
-  const displayMerit = viewMode === 'latest' ? groupStats.avg_daily_merit : seasonGroupAverages.avg_daily_merit
-  const displayAssist = viewMode === 'latest' ? groupStats.avg_daily_assist : seasonGroupAverages.avg_daily_assist
-
-  const contributionDiff = calculatePercentDiff(displayContribution, allianceAverages.avg_daily_contribution)
-  const meritDiff = calculatePercentDiff(displayMerit, allianceAverages.avg_daily_merit)
-  const assistDiff = calculatePercentDiff(displayAssist, allianceAverages.avg_daily_assist)
+  const contributionDiff = calculatePercentDiff(groupStats.avg_daily_contribution, allianceAverages.avg_daily_contribution)
+  const meritDiff = calculatePercentDiff(groupStats.avg_daily_merit, allianceAverages.avg_daily_merit)
+  const assistDiff = calculatePercentDiff(groupStats.avg_daily_assist, allianceAverages.avg_daily_assist)
 
   // Transform comparison data for chart
   const chartData = useMemo(() =>
@@ -298,7 +245,7 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
             <CardDescription>人日均貢獻</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{formatNumber(displayContribution)}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatNumber(groupStats.avg_daily_contribution)}</div>
             <div className="flex items-center gap-1 mt-1">
               {contributionDiff >= 0 ? (
                 <TrendingUp className="h-3 w-3 text-primary" />
@@ -319,7 +266,7 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
             <CardDescription>人日均戰功</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{formatNumber(displayMerit)}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatNumber(groupStats.avg_daily_merit)}</div>
             <div className="flex items-center gap-1 mt-1">
               {meritDiff >= 0 ? (
                 <TrendingUp className="h-3 w-3 text-primary" />
@@ -340,7 +287,7 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
             <CardDescription>人日均助攻</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{formatNumber(displayAssist)}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatNumber(groupStats.avg_daily_assist)}</div>
             <div className="flex items-center gap-1 mt-1">
               {assistDiff >= 0 ? (
                 <TrendingUp className="h-3 w-3 text-primary" />
@@ -487,15 +434,6 @@ function OverviewTab({ groupStats, allianceAverages, allGroupsData, periodTrends
 // Tab 2: Merit Distribution
 // ============================================================================
 
-interface MeritBin {
-  readonly range: string
-  readonly label: string
-  readonly min: number
-  readonly max: number
-  readonly count: number
-  readonly percentage: number
-}
-
 const meritDistributionConfig = {
   count: {
     label: '人數',
@@ -510,8 +448,6 @@ interface MeritDistributionTabProps {
 }
 
 function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistributionTabProps) {
-  const [hoveredMember, setHoveredMember] = useState<GroupMember | null>(null)
-
   // Expand periods to daily data for date-based X-axis
   const dailyData = useMemo(
     () =>
@@ -524,107 +460,29 @@ function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistri
   )
   const xAxisTicks = useMemo(() => getPeriodBoundaryTicks(periodTrends), [periodTrends])
 
-  // Calculate dynamic merit distribution bins
-  // Uses "nice" step sizes based on max value for clean integer boundaries
-  const meritBins = useMemo((): MeritBin[] => {
-    if (members.length === 0) return []
+  // Calculate dynamic merit distribution bins using shared utility
+  const meritBins = useMemo(
+    () => calculateDistributionBins(members, (m) => m.daily_merit),
+    [members]
+  )
 
-    const merits = members.map((m) => m.daily_merit)
-    const maxMerit = Math.max(...merits, 0)
+  // Prepare box plot stats and strip plot points
+  const boxPlotStats = useMemo(() => ({
+    min: groupStats.merit_min,
+    q1: groupStats.merit_q1,
+    median: groupStats.merit_median,
+    q3: groupStats.merit_q3,
+    max: groupStats.merit_max,
+  }), [groupStats])
 
-    // All members are inactive (0 merit)
-    if (maxMerit === 0) {
-      return [{ range: '0', label: '0', min: 0, max: Infinity, count: members.length, percentage: 100 }]
-    }
-
-    // Select a "nice" step size that produces 5-8 bins
-    // Prefer round numbers in 萬 (10000) units for readability
-    const selectStep = (max: number): number => {
-      const niceSteps = [5000, 10000, 20000, 50000, 100000, 200000]
-      const targetBins = 6
-
-      // Find step that produces closest to target bin count
-      for (const step of niceSteps) {
-        const binCount = Math.ceil(max / step)
-        if (binCount >= 4 && binCount <= 8) return step
-      }
-
-      // Fallback: calculate based on magnitude
-      const rawStep = max / targetBins
-      const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)))
-      const normalized = rawStep / magnitude
-      const niceNormalized = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
-      return niceNormalized * magnitude
-    }
-
-    const step = selectStep(maxMerit)
-    const numRanges = Math.ceil(maxMerit / step)
-
-    // Format number as 萬 for readability
-    const formatWan = (v: number): string => {
-      if (v === 0) return '0'
-      if (v >= 10000) {
-        const wan = v / 10000
-        return Number.isInteger(wan) ? `${wan}萬` : `${wan.toFixed(1)}萬`
-      }
-      return v.toLocaleString()
-    }
-
-    // Build bin definitions: first bin is always "0" (inactive members)
-    type BinDef = { min: number; max: number; label: string }
-    const binDefs: BinDef[] = [{ min: 0, max: 0.01, label: '0' }]
-
-    for (let i = 0; i < numRanges; i++) {
-      const rangeMin = i * step + (i === 0 ? 0.01 : 0)
-      const rangeMax = (i + 1) * step
-      const isLast = i === numRanges - 1
-
-      let label: string
-      if (i === 0) {
-        label = `0-${formatWan(step)}`
-      } else if (isLast) {
-        label = `${formatWan(i * step)}+`
-      } else {
-        label = `${formatWan(i * step)}-${formatWan(rangeMax)}`
-      }
-
-      binDefs.push({
-        min: rangeMin,
-        max: isLast ? Infinity : rangeMax,
-        label,
-      })
-    }
-
-    // Count members in each bin (single pass for O(n) performance)
-    const total = members.length
-    const counts = new Array<number>(binDefs.length).fill(0)
-
-    for (const member of members) {
-      const merit = member.daily_merit
-      for (let i = 0; i < binDefs.length; i++) {
-        if (merit >= binDefs[i].min && merit < binDefs[i].max) {
-          counts[i]++
-          break
-        }
-      }
-    }
-
-    return binDefs.map((def, i) => ({
-      range: def.label,
-      label: def.label,
-      min: def.min,
-      max: def.max,
-      count: counts[i],
-      percentage: total > 0 ? Math.round((counts[i] / total) * 100) : 0,
-    }))
-  }, [members])
-
-  // Calculate position for strip plot (handle edge case when min === max)
-  const getStripPosition = (merit: number): number => {
-    const range = groupStats.merit_max - groupStats.merit_min
-    if (range === 0) return 50
-    return ((merit - groupStats.merit_min) / range) * 100
-  }
+  const stripPlotPoints = useMemo(() =>
+    members.map(m => ({
+      id: m.id,
+      name: m.name,
+      value: m.daily_merit,
+    })),
+    [members]
+  )
 
   return (
     <div className="space-y-6">
@@ -637,67 +495,11 @@ function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistri
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {/* Top labels */}
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>{formatNumber(groupStats.merit_min)}</span>
-              <span>{formatNumber(groupStats.merit_median)}</span>
-              <span>{formatNumber(groupStats.merit_max)}</span>
-            </div>
-
-            {/* Box Plot */}
-            <div className="relative h-8">
-              {/* Full range bar */}
-              <div className="absolute inset-y-2 left-0 right-0 bg-muted rounded" />
-              {/* IQR box */}
-              <div
-                className="absolute inset-y-1 bg-primary/30 border-2 border-primary rounded"
-                style={{
-                  left: `${getStripPosition(groupStats.merit_q1)}%`,
-                  right: `${100 - getStripPosition(groupStats.merit_q3)}%`,
-                }}
-              />
-              {/* Median line */}
-              <div
-                className="absolute inset-y-0 w-0.5 bg-primary"
-                style={{ left: `${getStripPosition(groupStats.merit_median)}%` }}
-              />
-            </div>
-
-            {/* Strip Plot - Individual member data points */}
-            <div className="relative h-6">
-              {members.map((member) => {
-                const position = getStripPosition(member.daily_merit)
-                const isHovered = hoveredMember?.id === member.id
-                return (
-                  <div
-                    key={member.id}
-                    className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary/70 hover:bg-primary hover:scale-150 cursor-pointer transition-transform z-10"
-                    style={{ left: `calc(${position}% - 5px)` }}
-                    onMouseEnter={() => setHoveredMember(member)}
-                    onMouseLeave={() => setHoveredMember(null)}
-                  >
-                    {isHovered && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded bg-popover border shadow-md text-xs whitespace-nowrap z-20">
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-muted-foreground">
-                          日均戰功: {formatNumber(member.daily_merit)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Bottom labels */}
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Min</span>
-              <span>Q1: {formatNumber(groupStats.merit_q1)}</span>
-              <span>Q3: {formatNumber(groupStats.merit_q3)}</span>
-              <span>Max</span>
-            </div>
-          </div>
+          <BoxPlot
+            stats={boxPlotStats}
+            points={stripPlotPoints}
+            color="primary"
+          />
         </CardContent>
       </Card>
 
@@ -726,7 +528,7 @@ function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistri
                 <ChartTooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null
-                    const data = payload[0].payload as MeritBin
+                    const data = payload[0].payload as DistributionBin
                     return (
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
                         <div className="font-medium">日均戰功: {data.label}</div>
@@ -814,15 +616,6 @@ function MeritDistributionTab({ groupStats, members, periodTrends }: MeritDistri
 // Tab 3: Contribution Distribution
 // ============================================================================
 
-interface ContributionBin {
-  readonly range: string
-  readonly label: string
-  readonly min: number
-  readonly max: number
-  readonly count: number
-  readonly percentage: number
-}
-
 interface ContributionDistributionTabProps {
   readonly groupStats: GroupStats
   readonly members: readonly GroupMember[]
@@ -830,8 +623,6 @@ interface ContributionDistributionTabProps {
 }
 
 function ContributionDistributionTab({ groupStats, members, periodTrends }: ContributionDistributionTabProps) {
-  const [hoveredMember, setHoveredMember] = useState<GroupMember | null>(null)
-
   // Expand periods to daily data for date-based X-axis
   const dailyData = useMemo(
     () =>
@@ -844,106 +635,29 @@ function ContributionDistributionTab({ groupStats, members, periodTrends }: Cont
   )
   const xAxisTicks = useMemo(() => getPeriodBoundaryTicks(periodTrends), [periodTrends])
 
-  // Calculate dynamic contribution distribution bins
-  const contributionBins = useMemo((): ContributionBin[] => {
-    if (members.length === 0) return []
+  // Calculate dynamic contribution distribution bins using shared utility
+  const contributionBins = useMemo(
+    () => calculateDistributionBins(members, (m) => m.daily_contribution),
+    [members]
+  )
 
-    const contributions = members.map((m) => m.daily_contribution)
-    const maxContribution = Math.max(...contributions, 0)
+  // Prepare box plot stats and strip plot points
+  const boxPlotStats = useMemo(() => ({
+    min: groupStats.contribution_min,
+    q1: groupStats.contribution_q1,
+    median: groupStats.contribution_median,
+    q3: groupStats.contribution_q3,
+    max: groupStats.contribution_max,
+  }), [groupStats])
 
-    // All members are inactive (0 contribution)
-    if (maxContribution === 0) {
-      return [{ range: '0', label: '0', min: 0, max: Infinity, count: members.length, percentage: 100 }]
-    }
-
-    // Select a "nice" step size that produces 5-8 bins
-    // Prefer round numbers in 萬 (10000) units for readability
-    const selectStep = (max: number): number => {
-      const niceSteps = [5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000]
-      const targetBins = 6
-
-      // Find step that produces closest to target bin count
-      for (const step of niceSteps) {
-        const binCount = Math.ceil(max / step)
-        if (binCount >= 4 && binCount <= 8) return step
-      }
-
-      // Fallback: calculate based on magnitude
-      const rawStep = max / targetBins
-      const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)))
-      const normalized = rawStep / magnitude
-      const niceNormalized = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
-      return niceNormalized * magnitude
-    }
-
-    const step = selectStep(maxContribution)
-    const numRanges = Math.ceil(maxContribution / step)
-
-    // Format number as 萬 for readability
-    const formatWan = (v: number): string => {
-      if (v === 0) return '0'
-      if (v >= 10000) {
-        const wan = v / 10000
-        return Number.isInteger(wan) ? `${wan}萬` : `${wan.toFixed(1)}萬`
-      }
-      return v.toLocaleString()
-    }
-
-    // Build bin definitions: first bin is always "0" (inactive members)
-    type BinDef = { min: number; max: number; label: string }
-    const binDefs: BinDef[] = [{ min: 0, max: 0.01, label: '0' }]
-
-    for (let i = 0; i < numRanges; i++) {
-      const rangeMin = i * step + (i === 0 ? 0.01 : 0)
-      const rangeMax = (i + 1) * step
-      const isLast = i === numRanges - 1
-
-      let label: string
-      if (i === 0) {
-        label = `0-${formatWan(step)}`
-      } else if (isLast) {
-        label = `${formatWan(i * step)}+`
-      } else {
-        label = `${formatWan(i * step)}-${formatWan(rangeMax)}`
-      }
-
-      binDefs.push({
-        min: rangeMin,
-        max: isLast ? Infinity : rangeMax,
-        label,
-      })
-    }
-
-    // Count members in each bin (single pass for O(n) performance)
-    const total = members.length
-    const counts = new Array<number>(binDefs.length).fill(0)
-
-    for (const member of members) {
-      const contribution = member.daily_contribution
-      for (let i = 0; i < binDefs.length; i++) {
-        if (contribution >= binDefs[i].min && contribution < binDefs[i].max) {
-          counts[i]++
-          break
-        }
-      }
-    }
-
-    return binDefs.map((def, i) => ({
-      range: def.label,
-      label: def.label,
-      min: def.min,
-      max: def.max,
-      count: counts[i],
-      percentage: total > 0 ? Math.round((counts[i] / total) * 100) : 0,
-    }))
-  }, [members])
-
-  // Calculate position for strip plot (handle edge case when min === max)
-  const getStripPosition = (contribution: number): number => {
-    const range = groupStats.contribution_max - groupStats.contribution_min
-    if (range === 0) return 50
-    return ((contribution - groupStats.contribution_min) / range) * 100
-  }
+  const stripPlotPoints = useMemo(() =>
+    members.map(m => ({
+      id: m.id,
+      name: m.name,
+      value: m.daily_contribution,
+    })),
+    [members]
+  )
 
   return (
     <div className="space-y-6">
@@ -956,67 +670,11 @@ function ContributionDistributionTab({ groupStats, members, periodTrends }: Cont
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {/* Top labels */}
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>{formatNumber(groupStats.contribution_min)}</span>
-              <span>{formatNumber(groupStats.contribution_median)}</span>
-              <span>{formatNumber(groupStats.contribution_max)}</span>
-            </div>
-
-            {/* Box Plot */}
-            <div className="relative h-8">
-              {/* Full range bar */}
-              <div className="absolute inset-y-2 left-0 right-0 bg-muted rounded" />
-              {/* IQR box */}
-              <div
-                className="absolute inset-y-1 bg-chart-3/30 border-2 border-chart-3 rounded"
-                style={{
-                  left: `${getStripPosition(groupStats.contribution_q1)}%`,
-                  right: `${100 - getStripPosition(groupStats.contribution_q3)}%`,
-                }}
-              />
-              {/* Median line */}
-              <div
-                className="absolute inset-y-0 w-0.5 bg-chart-3"
-                style={{ left: `${getStripPosition(groupStats.contribution_median)}%` }}
-              />
-            </div>
-
-            {/* Strip Plot - Individual member data points */}
-            <div className="relative h-6">
-              {members.map((member) => {
-                const position = getStripPosition(member.daily_contribution)
-                const isHovered = hoveredMember?.id === member.id
-                return (
-                  <div
-                    key={member.id}
-                    className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-chart-3/70 hover:bg-chart-3 hover:scale-150 cursor-pointer transition-transform z-10"
-                    style={{ left: `calc(${position}% - 5px)` }}
-                    onMouseEnter={() => setHoveredMember(member)}
-                    onMouseLeave={() => setHoveredMember(null)}
-                  >
-                    {isHovered && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded bg-popover border shadow-md text-xs whitespace-nowrap z-20">
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-muted-foreground">
-                          日均貢獻: {formatNumber(member.daily_contribution)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Bottom labels */}
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Min</span>
-              <span>Q1: {formatNumber(groupStats.contribution_q1)}</span>
-              <span>Q3: {formatNumber(groupStats.contribution_q3)}</span>
-              <span>Max</span>
-            </div>
-          </div>
+          <BoxPlot
+            stats={boxPlotStats}
+            points={stripPlotPoints}
+            color="chart-3"
+          />
         </CardContent>
       </Card>
 
@@ -1045,7 +703,7 @@ function ContributionDistributionTab({ groupStats, members, periodTrends }: Cont
                 <ChartTooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null
-                    const data = payload[0].payload as ContributionBin
+                    const data = payload[0].payload as DistributionBin
                     return (
                       <div className="rounded-lg border bg-background p-2 shadow-sm">
                         <div className="font-medium">日均貢獻: {data.label}</div>
@@ -1395,8 +1053,6 @@ function GroupAnalytics() {
                 groupStats={groupStats}
                 allianceAverages={allianceAverages}
                 allGroupsData={groupsComparison ?? []}
-                periodTrends={periodTrends}
-                viewMode={viewMode}
               />
             </TabsContent>
 
