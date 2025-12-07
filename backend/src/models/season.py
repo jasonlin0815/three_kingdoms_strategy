@@ -7,7 +7,7 @@ Season Pydantic models
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SeasonBase(BaseModel):
@@ -49,10 +49,9 @@ class SeasonUpdate(BaseModel):
 class Season(SeasonBase):
     """Season model with all fields"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     alliance_id: UUID
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True

@@ -7,7 +7,7 @@ CSV Upload Pydantic models
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CsvUploadBase(BaseModel):
@@ -36,11 +36,10 @@ class CsvUploadUpdate(BaseModel):
 class CsvUpload(CsvUploadBase):
     """CSV upload model with all fields"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     season_id: UUID
     alliance_id: UUID
     uploaded_at: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True

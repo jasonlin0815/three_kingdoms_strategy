@@ -7,7 +7,7 @@ Member Snapshot Pydantic models
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MemberSnapshotBase(BaseModel):
@@ -46,14 +46,13 @@ class MemberSnapshotCreate(MemberSnapshotBase):
 class MemberSnapshot(MemberSnapshotBase):
     """Member snapshot model with all fields"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     csv_upload_id: UUID
     member_id: UUID
     alliance_id: UUID
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class MemberSnapshotWithDetails(MemberSnapshot):

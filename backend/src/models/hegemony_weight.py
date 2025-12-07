@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HegemonyWeightBase(BaseModel):
@@ -49,22 +49,6 @@ class HegemonyWeightBase(BaseModel):
         description="This snapshot's weight in final hegemony score calculation",
     )
 
-    @field_validator("weight_contribution", "weight_merit", "weight_assist", "weight_donation")
-    @classmethod
-    def validate_weight_range(cls, v: Decimal) -> Decimal:
-        """Validate weight is between 0 and 1"""
-        if v < 0 or v > 1:
-            raise ValueError("Weight must be between 0 and 1")
-        return v
-
-    @field_validator("snapshot_weight")
-    @classmethod
-    def validate_snapshot_weight_range(cls, v: Decimal) -> Decimal:
-        """Validate snapshot weight is between 0 and 1"""
-        if v < 0 or v > 1:
-            raise ValueError("Snapshot weight must be between 0 and 1")
-        return v
-
     def validate_indicator_weights_sum(self) -> bool:
         """Validate that tier 1 weights sum to 1.0 (with small tolerance)"""
         total = (
@@ -95,15 +79,14 @@ class HegemonyWeightUpdate(BaseModel):
 class HegemonyWeight(HegemonyWeightBase):
     """Complete hegemony weight model (from database)"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     alliance_id: UUID
     season_id: UUID
     csv_upload_id: UUID
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class HegemonyWeightWithSnapshot(HegemonyWeight):

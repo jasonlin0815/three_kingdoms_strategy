@@ -10,13 +10,12 @@
  * - Auto-load snapshot weights
  */
 
-import React from 'react'
 import { Loader2, Scale } from 'lucide-react'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { useSeasons } from '@/hooks/use-seasons'
 import { HegemonyWeightCard } from '@/components/hegemony-weights/HegemonyWeightCard'
 
-const HegemonyWeights: React.FC = () => {
+function HegemonyWeights() {
   // Fetch all seasons
   const { data: seasons, isLoading } = useSeasons()
 

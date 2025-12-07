@@ -11,6 +11,7 @@ from src.core.database import get_supabase_client
 from src.services.alliance_collaborator_service import AllianceCollaboratorService
 from src.services.alliance_service import AllianceService
 from src.services.csv_upload_service import CSVUploadService
+from src.services.hegemony_weight_service import HegemonyWeightService
 from src.services.permission_service import PermissionService
 from src.services.season_service import SeasonService
 
@@ -117,3 +118,22 @@ def get_permission_service() -> PermissionService:
     符合 CLAUDE.md 🔴: Provider Pattern for service injection
     """
     return PermissionService()
+
+
+def get_hegemony_weight_service() -> HegemonyWeightService:
+    """
+    Get hegemony weight service instance
+
+    Returns:
+        HegemonyWeightService instance
+
+    Usage:
+        @app.get("/hegemony-weights")
+        async def get_weights(
+            service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)]
+        ):
+            pass
+
+    符合 CLAUDE.md 🔴: Provider Pattern for service injection
+    """
+    return HegemonyWeightService()

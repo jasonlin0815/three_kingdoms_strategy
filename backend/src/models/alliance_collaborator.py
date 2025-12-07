@@ -10,7 +10,7 @@ Alliance Collaborator Pydantic models
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class AllianceCollaboratorBase(BaseModel):
@@ -33,6 +33,8 @@ class AllianceCollaboratorCreate(BaseModel):
 class AllianceCollaboratorDB(BaseModel):
     """Alliance collaborator database model"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     alliance_id: UUID
     user_id: UUID
@@ -43,12 +45,11 @@ class AllianceCollaboratorDB(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class AllianceCollaboratorResponse(BaseModel):
     """Alliance collaborator API response"""
+
+    model_config = ConfigDict(extra="allow")
 
     id: UUID
     alliance_id: UUID
@@ -63,9 +64,6 @@ class AllianceCollaboratorResponse(BaseModel):
     user_name: str | None = None  # Deprecated, use user_full_name
     user_full_name: str | None = None  # From Google OAuth (full_name or name)
     user_avatar_url: str | None = None  # From Google OAuth (avatar_url or picture)
-
-    class Config:
-        extra = "allow"  # Allow additional fields from service
 
 
 class AllianceCollaboratorListResponse(BaseModel):

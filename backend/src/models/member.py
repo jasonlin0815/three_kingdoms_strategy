@@ -7,7 +7,7 @@ Member Pydantic models
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MemberBase(BaseModel):
@@ -35,6 +35,8 @@ class MemberUpdate(BaseModel):
 class Member(MemberBase):
     """Member model with all fields"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     alliance_id: UUID
     first_seen_at: datetime
@@ -42,6 +44,3 @@ class Member(MemberBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
