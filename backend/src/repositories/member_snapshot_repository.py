@@ -43,6 +43,40 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
 
         return self._build_models(data)
 
+    async def get_by_uploads_batch(self, csv_upload_ids: list[UUID]) -> list[MemberSnapshot]:
+        """
+        Get member snapshots for multiple CSV uploads in a single query.
+
+        Performance optimization to avoid N+1 queries when fetching snapshots
+        for multiple uploads (e.g., in hegemony score calculation).
+
+        Args:
+            csv_upload_ids: List of CSV upload UUIDs
+
+        Returns:
+            List of member snapshot instances for all specified uploads
+
+        符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
+        """
+        if not csv_upload_ids:
+            return []
+
+        # Convert UUIDs to strings for the IN query
+        upload_id_strings = [str(uid) for uid in csv_upload_ids]
+
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
+            .select("*")
+            .in_("csv_upload_id", upload_id_strings)
+            .order("csv_upload_id")
+            .order("contribution_rank")
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+
+        return self._build_models(data)
+
     async def get_by_member(
         self, member_id: UUID, limit: int = 100
     ) -> list[MemberSnapshot]:

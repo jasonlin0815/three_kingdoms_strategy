@@ -1,6 +1,10 @@
 /**
  * Hegemony Weights Page - Season-based Weight Configuration
  *
+ * Performance optimizations:
+ * - Prefetches hegemony weights and CSV uploads for all seasons in parallel
+ * - Reduces waterfall effect when rendering HegemonyWeightCards
+ *
  * 符合 CLAUDE.md 🔴:
  * - JSX syntax only
  * - TanStack Query for server state
@@ -10,14 +14,46 @@
  * - Auto-load snapshot weights
  */
 
+import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, Scale } from 'lucide-react'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { useSeasons } from '@/hooks/use-seasons'
 import { HegemonyWeightCard } from '@/components/hegemony-weights/HegemonyWeightCard'
+import { hegemonyWeightKeys } from '@/hooks/use-hegemony-weights'
+import { csvUploadKeys } from '@/hooks/use-csv-uploads'
+import { apiClient } from '@/lib/api-client'
 
 function HegemonyWeights() {
+  const queryClient = useQueryClient()
+
   // Fetch all seasons
   const { data: seasons, isLoading } = useSeasons()
+
+  /**
+   * Prefetch hegemony weights and CSV uploads for all seasons
+   * This runs in parallel and populates the cache before HegemonyWeightCards render
+   */
+  useEffect(() => {
+    if (!seasons || seasons.length === 0) return
+
+    // Prefetch data for all seasons in parallel
+    seasons.forEach((season) => {
+      // Prefetch hegemony weights
+      queryClient.prefetchQuery({
+        queryKey: hegemonyWeightKeys.list(season.id),
+        queryFn: () => apiClient.getHegemonyWeights(season.id),
+        staleTime: 5 * 60 * 1000
+      })
+
+      // Prefetch CSV uploads
+      queryClient.prefetchQuery({
+        queryKey: csvUploadKeys.list(season.id),
+        queryFn: () => apiClient.getCsvUploads(season.id),
+        staleTime: 5 * 60 * 1000
+      })
+    })
+  }, [seasons, queryClient])
 
   /**
    * Sort seasons: active first, then by start_date descending

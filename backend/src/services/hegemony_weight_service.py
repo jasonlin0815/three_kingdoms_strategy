@@ -5,9 +5,12 @@ Business logic layer for hegemony weight management and score calculation.
 Follows CLAUDE.md 🔴: Service layer orchestrates repositories, no direct database calls.
 """
 
+import asyncio
 import logging
 from decimal import Decimal
 from uuid import UUID
+
+from fastapi import HTTPException, status
 
 from src.core.utils.date_helpers import format_date_key
 from src.models.hegemony_weight import (
@@ -18,13 +21,15 @@ from src.models.hegemony_weight import (
     HegemonyWeightWithSnapshot,
     SnapshotWeightsSummary,
 )
+from src.models.member_snapshot import MemberSnapshot
+from src.repositories.alliance_collaborator_repository import (
+    AllianceCollaboratorRepository,
+)
 from src.repositories.alliance_repository import AllianceRepository
 from src.repositories.csv_upload_repository import CsvUploadRepository
 from src.repositories.hegemony_weight_repository import HegemonyWeightRepository
-from src.repositories.member_repository import MemberRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.repositories.season_repository import SeasonRepository
-from src.services.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +43,16 @@ class HegemonyWeightService:
         self._alliance_repo = AllianceRepository()
         self._season_repo = SeasonRepository()
         self._upload_repo = CsvUploadRepository()
-        self._member_repo = MemberRepository()
         self._snapshot_repo = MemberSnapshotRepository()
-        self._permission_service = PermissionService()
+        self._collaborator_repo = AllianceCollaboratorRepository()
 
     async def _verify_season_access(
         self, user_id: UUID, season_id: UUID, required_roles: list[str]
     ) -> tuple:
         """
         Verify user has access to season with required role and return season and alliance.
+
+        Performance optimized: Uses asyncio.gather to parallelize DB queries.
 
         Args:
             user_id: User UUID
@@ -61,18 +67,37 @@ class HegemonyWeightService:
             PermissionError: If user doesn't own the season
             HTTPException 403: If user doesn't have required role
         """
-        season = await self._season_repo.get_by_id(season_id)
+        # Parallel fetch: season and alliance data
+        # 符合 CLAUDE.md: Use asyncio.gather to avoid sequential DB calls
+        season, alliance = await asyncio.gather(
+            self._season_repo.get_by_id(season_id),
+            self._alliance_repo.get_by_collaborator(user_id),
+        )
+
         if not season:
             raise ValueError(f"Season {season_id} not found")
 
-        alliance = await self._alliance_repo.get_by_collaborator(user_id)
         if not alliance or alliance.id != season.alliance_id:
             raise PermissionError("You don't have permission to access this season")
 
-        # Verify permission with required roles
-        await self._permission_service.require_permission(
-            user_id, alliance.id, required_roles, "manage hegemony weights"
-        )
+        # Now check role (requires alliance.id from above)
+        try:
+            role = await self._collaborator_repo.get_collaborator_role(alliance.id, user_id)
+        except ValueError:
+            role = None
+
+        if role is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="You are not a member of this alliance"
+            )
+
+        if role not in required_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You don't have permission to manage hegemony weights. "
+                       f"Required role: {' or '.join(required_roles)}, your role: {role}"
+            )
 
         return season, alliance
 
@@ -226,6 +251,54 @@ class HegemonyWeightService:
             snapshot_weight=data.snapshot_weight,
         )
 
+    async def _verify_weight_access(
+        self, user_id: UUID, weight_id: UUID, action: str
+    ) -> HegemonyWeight:
+        """
+        Verify user has access to modify a weight.
+
+        Performance optimized: Uses asyncio.gather to parallelize DB queries.
+
+        Args:
+            user_id: User UUID
+            weight_id: HegemonyWeight UUID
+            action: Description of the action (for error messages)
+
+        Returns:
+            HegemonyWeight object
+
+        Raises:
+            ValueError: If weight not found
+            PermissionError: If user doesn't have permission
+            HTTPException 403: If user is not owner or collaborator
+        """
+        # Parallel fetch: weight and alliance data
+        weight, alliance = await asyncio.gather(
+            self._weight_repo.get_by_id(weight_id),
+            self._alliance_repo.get_by_collaborator(user_id),
+        )
+
+        if not weight:
+            raise ValueError(f"Weight {weight_id} not found")
+
+        if not alliance or alliance.id != weight.alliance_id:
+            raise PermissionError(f"You don't have permission to {action}")
+
+        # Check role (requires alliance.id from above)
+        try:
+            role = await self._collaborator_repo.get_collaborator_role(alliance.id, user_id)
+        except ValueError:
+            role = None
+
+        if role not in ['owner', 'collaborator']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You don't have permission to {action}. "
+                       f"Required role: owner or collaborator, your role: {role or 'none'}"
+            )
+
+        return weight
+
     async def update_weight(
         self, user_id: UUID, weight_id: UUID, data: HegemonyWeightUpdate
     ) -> HegemonyWeight:
@@ -245,19 +318,7 @@ class HegemonyWeightService:
         Raises:
             HTTPException 403: If user doesn't have permission
         """
-        # Verify weight exists and user owns it
-        weight = await self._weight_repo.get_by_id(weight_id)
-        if not weight:
-            raise ValueError(f"Weight {weight_id} not found")
-
-        alliance = await self._alliance_repo.get_by_collaborator(user_id)
-        if not alliance or alliance.id != weight.alliance_id:
-            raise PermissionError("You don't have permission to update this weight")
-
-        # Verify permission: owner or collaborator can update weights
-        await self._permission_service.require_owner_or_collaborator(
-            user_id, alliance.id, "update hegemony weights"
-        )
+        await self._verify_weight_access(user_id, weight_id, "update hegemony weights")
 
         return await self._weight_repo.update_weights(
             weight_id=weight_id,
@@ -284,19 +345,7 @@ class HegemonyWeightService:
         Raises:
             HTTPException 403: If user doesn't have permission
         """
-        # Verify weight exists and user owns it
-        weight = await self._weight_repo.get_by_id(weight_id)
-        if not weight:
-            raise ValueError(f"Weight {weight_id} not found")
-
-        alliance = await self._alliance_repo.get_by_collaborator(user_id)
-        if not alliance or alliance.id != weight.alliance_id:
-            raise PermissionError("You don't have permission to delete this weight")
-
-        # Verify permission: owner or collaborator can delete weights
-        await self._permission_service.require_owner_or_collaborator(
-            user_id, alliance.id, "delete hegemony weights"
-        )
+        await self._verify_weight_access(user_id, weight_id, "delete hegemony weights")
 
         return await self._weight_repo.delete(weight_id)
 
@@ -339,15 +388,12 @@ class HegemonyWeightService:
         # Get all CSV upload IDs
         csv_upload_ids = [w.csv_upload_id for w in weights]
 
-        # Batch fetch all snapshots for performance optimization
-        all_snapshots = []
-        for upload_id in csv_upload_ids:
-            snapshots = await self._snapshot_repo.get_by_upload(upload_id)
-            all_snapshots.extend(snapshots)
+        # Batch fetch all snapshots in a single query for performance optimization
+        # 符合 CLAUDE.md: Avoid N+1 queries - use batch query instead of loop
+        all_snapshots = await self._snapshot_repo.get_by_uploads_batch(csv_upload_ids)
 
         # Group snapshots by member_id for O(1) lookup
         # Structure: {member_id: {csv_upload_id: snapshot}}
-        from src.models.member_snapshot import MemberSnapshot
         snapshots_by_member: dict[UUID, dict[UUID, MemberSnapshot]] = {}
         member_names: dict[UUID, str] = {}
 

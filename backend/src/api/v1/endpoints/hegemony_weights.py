@@ -6,6 +6,7 @@ API layer for hegemony weight configuration and score calculation.
 - API layer delegates to Service layer
 - Uses Provider Pattern for dependency injection
 - Uses @router.get("") pattern (no trailing slash)
+- Specific routes (/initialize, /summary, /preview) MUST come before parametric routes (/{weight_id})
 """
 
 from typing import Annotated
@@ -28,7 +29,12 @@ from src.services.hegemony_weight_service import HegemonyWeightService
 router = APIRouter(prefix="/hegemony-weights", tags=["hegemony-weights"])
 
 
-# 符合 CLAUDE.md 🔴: More specific routes MUST come before general routes
+# =============================================================================
+# Static Routes (MUST come before parametric routes like /{weight_id})
+# 符合 CLAUDE.md 🔴: Specific routes MUST come before parametric routes
+# =============================================================================
+
+
 @router.post("/initialize", response_model=list[HegemonyWeight])
 async def initialize_season_weights(
     service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)],
@@ -49,21 +55,6 @@ async def initialize_season_weights(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.get("", response_model=list[HegemonyWeightWithSnapshot])
-async def get_season_weights(
-    service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)],
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-    season_id: UUID = Query(..., description="Season UUID"),
-):
-    """Get all hegemony weight configurations for a season."""
-    try:
-        return await service.get_season_weights(user_id, season_id)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-
 @router.get("/summary", response_model=SnapshotWeightsSummary)
 async def get_weights_summary(
     service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)],
@@ -73,6 +64,42 @@ async def get_weights_summary(
     """Get summary of all snapshot weights for a season with validation status."""
     try:
         return await service.get_weights_summary(user_id, season_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.get("/preview", response_model=list[HegemonyScorePreview])
+async def preview_hegemony_scores(
+    service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    season_id: UUID = Query(..., description="Season UUID"),
+    limit: int = Query(default=20, ge=1, le=500, description="Top N members to return"),
+):
+    """Calculate and preview hegemony scores for top members."""
+    try:
+        return await service.calculate_hegemony_scores(user_id, season_id, limit)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+# =============================================================================
+# Collection Routes (root path)
+# =============================================================================
+
+
+@router.get("", response_model=list[HegemonyWeightWithSnapshot])
+async def get_season_weights(
+    service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    season_id: UUID = Query(..., description="Season UUID"),
+):
+    """Get all hegemony weight configurations for a season."""
+    try:
+        return await service.get_season_weights(user_id, season_id)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
@@ -101,6 +128,11 @@ async def create_weight(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+# =============================================================================
+# Parametric Routes (/{weight_id}) - MUST come after static routes
+# =============================================================================
+
+
 @router.patch("/{weight_id}", response_model=HegemonyWeight)
 async def update_weight(
     weight_id: UUID,
@@ -126,22 +158,6 @@ async def delete_weight(
     """Delete a hegemony weight configuration."""
     try:
         await service.delete_weight(user_id, weight_id)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-
-@router.get("/preview", response_model=list[HegemonyScorePreview])
-async def preview_hegemony_scores(
-    service: Annotated[HegemonyWeightService, Depends(get_hegemony_weight_service)],
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-    season_id: UUID = Query(..., description="Season UUID"),
-    limit: int = Query(default=20, ge=1, le=500, description="Top N members to return"),
-):
-    """Calculate and preview hegemony scores for top members."""
-    try:
-        return await service.calculate_hegemony_scores(user_id, season_id, limit)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
