@@ -333,6 +333,7 @@ export interface PerformerItem {
   readonly daily_merit: number
   readonly rank: number
   readonly rank_change: number | null
+  readonly merit_change: number | null
 }
 
 /**

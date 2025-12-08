@@ -706,6 +706,7 @@ function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
                   <th className="text-left py-2 px-2 font-medium">組別</th>
                   <th className="text-right py-2 px-2 font-medium">人日均貢獻</th>
                   <th className="text-right py-2 px-2 font-medium">人日均戰功</th>
+                  {viewMode === 'latest' && <th className="text-right py-2 px-2 font-medium">戰功變化</th>}
                   {viewMode === 'latest' && <th className="text-right py-2 px-2 font-medium">排名變化</th>}
                 </tr>
               </thead>
@@ -717,6 +718,17 @@ function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
                     <td className="py-2 px-2 text-muted-foreground">{m.group || '-'}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{formatNumber(m.daily_contribution)}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{formatNumber(m.daily_merit)}</td>
+                    {viewMode === 'latest' && (
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {m.merit_change != null ? (
+                          <span className={m.merit_change >= 0 ? 'text-primary' : 'text-destructive'}>
+                            {m.merit_change >= 0 ? '+' : ''}{formatNumberCompact(m.merit_change)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                    )}
                     {viewMode === 'latest' && (
                       <td className="py-2 px-2 text-right">
                         <RankChangeIndicator change={m.rank_change} showNewLabel={false} />

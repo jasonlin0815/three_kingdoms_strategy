@@ -413,6 +413,7 @@ class PerformerItem(BaseModel):
     daily_merit: float = Field(..., ge=0)
     rank: int = Field(..., ge=1)
     rank_change: int | None = Field(None, description="Rank change (positive = improved)")
+    merit_change: float | None = Field(None, description="Daily merit change vs previous period")
 
 
 class AttentionItem(BaseModel):

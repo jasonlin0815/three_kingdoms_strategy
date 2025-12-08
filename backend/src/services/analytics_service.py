@@ -1057,7 +1057,7 @@ class AnalyticsService:
 
         # Build member data based on view
         member_data = self._build_member_data(
-            latest_metrics_raw, metrics_with_totals, season_days, view
+            latest_metrics_raw, metrics_with_totals, prev_metrics_map, season_days, view
         )
 
         # Calculate summary
@@ -1107,6 +1107,7 @@ class AnalyticsService:
         self,
         latest_metrics_raw: list[dict],
         metrics_with_totals: list[dict] | None,
+        prev_metrics_map: dict[UUID, dict],
         season_days: int,
         view: str,
     ) -> list[dict]:
@@ -1116,6 +1117,7 @@ class AnalyticsService:
         Args:
             latest_metrics_raw: Latest period metrics (raw dicts from get_by_period_with_member)
             metrics_with_totals: Metrics with snapshot totals (for season view)
+            prev_metrics_map: Previous period metrics map for change calculations
             season_days: Number of days in season
             view: 'latest' or 'season'
 
@@ -1144,25 +1146,37 @@ class AnalyticsService:
                     "power": m["end_power"],
                     "rank": m["end_rank"],
                     "rank_change": None,  # Not applicable for season view
+                    "merit_change": None,  # Not applicable for season view
                 })
             return result
 
         # Latest view - metrics_raw is list of dicts from get_by_period_with_member
-        return [
-            {
-                "member_id": str(m["member_id"]),
+        result = []
+        for m in latest_metrics_raw:
+            member_id = UUID(m["member_id"])
+            current_merit = float(Decimal(str(m["daily_merit"])))
+            prev_data = prev_metrics_map.get(member_id)
+            merit_change = (
+                round(current_merit - prev_data["daily_merit"], 2)
+                if prev_data
+                else None
+            )
+
+            result.append({
+                "member_id": str(member_id),
                 "name": m.get("member_name", ""),
                 "group": m["end_group"],
                 "daily_contribution": float(Decimal(str(m["daily_contribution"]))),
-                "daily_merit": float(Decimal(str(m["daily_merit"]))),
+                "daily_merit": current_merit,
                 "daily_assist": float(Decimal(str(m["daily_assist"]))),
                 "daily_donation": float(Decimal(str(m["daily_donation"]))),
                 "power": m["end_power"],
                 "rank": m["end_rank"],
                 "rank_change": m.get("rank_change"),
-            }
-            for m in latest_metrics_raw
-        ]
+                "merit_change": merit_change,
+            })
+
+        return result
 
     def _calculate_alliance_summary(
         self,
@@ -1449,6 +1463,7 @@ class AnalyticsService:
                 "daily_merit": m["daily_merit"],
                 "rank": m["rank"],
                 "rank_change": m["rank_change"],
+                "merit_change": m["merit_change"],
             }
 
         # Return all members - top (high to low) and bottom (low to high)
