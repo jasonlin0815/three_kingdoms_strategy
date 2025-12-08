@@ -30,7 +30,7 @@ export function Landing() {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate('/dashboard', { replace: true })
+      navigate('/analytics', { replace: true })
     }
   }, [user, loading, navigate])
 

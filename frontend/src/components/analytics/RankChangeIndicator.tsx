@@ -28,12 +28,12 @@ export function RankChangeIndicator({
 
   if (change === null) {
     const label = showNewLabel ? '新成員' : '新'
-    return <span className={`${text} text-muted-foreground`}>{label}</span>
+    return <span className={`${text} text-muted-foreground block text-right`}>{label}</span>
   }
 
   if (change > 0) {
     return (
-      <div className={`flex items-center ${gap} ${text} text-primary`}>
+      <div className={`flex items-center justify-end ${gap} ${text} text-primary`}>
         <TrendingUp className={icon} />
         <span>+{change}</span>
       </div>
@@ -42,7 +42,7 @@ export function RankChangeIndicator({
 
   if (change < 0) {
     return (
-      <div className={`flex items-center ${gap} ${text} text-destructive`}>
+      <div className={`flex items-center justify-end ${gap} ${text} text-destructive`}>
         <TrendingDown className={icon} />
         <span>{change}</span>
       </div>
@@ -50,7 +50,7 @@ export function RankChangeIndicator({
   }
 
   return (
-    <div className={`flex items-center ${gap} ${text} text-muted-foreground`}>
+    <div className={`flex items-center justify-end ${gap} ${text} text-muted-foreground`}>
       <Minus className={icon} />
       <span>持平</span>
     </div>

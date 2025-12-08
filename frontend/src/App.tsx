@@ -4,7 +4,6 @@ import { useAuth } from './hooks/use-auth'
 import { DashboardLayout } from './components/layout/DashboardLayout'
 import { Landing } from './pages/Landing'
 import { AuthCallback } from './pages/AuthCallback'
-import Overview from './pages/Overview'
 import Seasons from './pages/Seasons'
 import DataManagement from './pages/DataManagement'
 import HegemonyWeights from './pages/HegemonyWeights'
@@ -44,18 +43,10 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
 
           {/* Protected Routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Overview />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          {/* Redirect root to dashboard */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* Redirect old dashboard to analytics */}
+          <Route path="/dashboard" element={<Navigate to="/analytics" replace />} />
+          {/* Redirect root to analytics */}
+          <Route path="/" element={<Navigate to="/analytics" replace />} />
           <Route
             path="/seasons"
             element={

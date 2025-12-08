@@ -12,6 +12,13 @@
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
@@ -577,8 +584,16 @@ interface MemberDistributionTabProps {
 
 function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
   const [showTop, setShowTop] = useState(true)
+  const [displayCount, setDisplayCount] = useState<string>('10')
 
   const { summary, distributions, top_performers, bottom_performers, needs_attention } = data
+
+  // Filter performers based on display count
+  const displayedPerformers = useMemo(() => {
+    const source = showTop ? top_performers : bottom_performers
+    const count = displayCount === 'all' ? source.length : parseInt(displayCount, 10)
+    return source.slice(0, count)
+  }, [showTop, displayCount, top_performers, bottom_performers])
 
   return (
     <div className="space-y-6">
@@ -654,17 +669,31 @@ function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
       {/* Top/Bottom Performers */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">成員排行</CardTitle>
-              <CardDescription>{viewMode === 'latest' ? '本期表現' : '賽季平均'} Top 10 / Bottom 5</CardDescription>
+              <CardDescription>{viewMode === 'latest' ? '本期表現' : '賽季平均'}排名</CardDescription>
             </div>
-            <Tabs value={showTop ? 'top' : 'bottom'} onValueChange={(v) => setShowTop(v === 'top')}>
-              <TabsList className="h-8">
-                <TabsTrigger value="top" className="text-xs px-3">Top 10</TabsTrigger>
-                <TabsTrigger value="bottom" className="text-xs px-3">Bottom 5</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-2">
+              <Tabs value={showTop ? 'top' : 'bottom'} onValueChange={(v) => setShowTop(v === 'top')}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="top" className="text-xs px-3">Top</TabsTrigger>
+                  <TabsTrigger value="bottom" className="text-xs px-3">Bottom</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Select value={displayCount} onValueChange={setDisplayCount}>
+                <SelectTrigger className="w-24 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 人</SelectItem>
+                  <SelectItem value="10">10 人</SelectItem>
+                  <SelectItem value="20">20 人</SelectItem>
+                  <SelectItem value="50">50 人</SelectItem>
+                  <SelectItem value="all">全部</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -681,7 +710,7 @@ function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {(showTop ? top_performers : bottom_performers).map((m: PerformerItem) => (
+                {displayedPerformers.map((m: PerformerItem) => (
                   <tr key={m.member_id} className="border-b last:border-0">
                     <td className="py-2 px-2 tabular-nums font-medium">#{m.rank}</td>
                     <td className="py-2 px-2 font-medium">{m.name}</td>

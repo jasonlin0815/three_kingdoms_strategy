@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Calendar, Database, Trophy, Users, BarChart3, Settings, LogOut, Layers } from 'lucide-react'
+import { Calendar, Database, Trophy, Users, BarChart3, Settings, LogOut, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
@@ -15,11 +15,6 @@ interface NavigationItem {
 }
 
 const navigation: readonly NavigationItem[] = [
-  {
-    name: '總覽',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-  },
   {
     name: '賽季管理',
     href: '/seasons',
@@ -63,9 +58,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   const { user, signOut } = useAuth()
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return location.pathname === '/dashboard'
-    }
     return location.pathname.startsWith(href)
   }
 
@@ -82,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     <div className={cn('flex h-full w-64 flex-col bg-card border-r border-border', className)}>
       {/* Logo Section */}
       <div className="flex h-16 items-center px-6 border-b border-border">
-        <Link to="/dashboard" className="flex items-center gap-2">
+        <Link to="/analytics" className="flex items-center gap-2">
           <img
             src="/assets/logo.png"
             alt="三國志戰略版"

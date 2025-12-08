@@ -1295,54 +1295,90 @@ class AnalyticsService:
         return result
 
     def _calculate_distributions(self, member_data: list[dict]) -> dict:
-        """Calculate distribution histogram bins for contribution and merit."""
-        # Contribution bins: 0-5K, 5K-10K, 10K-15K, 15K-20K, 20K+
-        contribution_bins = [
-            {"range": "0-5K", "min_value": 0, "max_value": 5000, "count": 0},
-            {"range": "5K-10K", "min_value": 5000, "max_value": 10000, "count": 0},
-            {"range": "10K-15K", "min_value": 10000, "max_value": 15000, "count": 0},
-            {"range": "15K-20K", "min_value": 15000, "max_value": 20000, "count": 0},
-            {"range": "20K+", "min_value": 20000, "max_value": float("inf"), "count": 0},
-        ]
+        """Calculate distribution histogram bins for contribution and merit dynamically."""
+        if not member_data:
+            return {"contribution": [], "merit": []}
 
-        # Merit bins: 0-30K, 30K-60K, 60K-90K, 90K-120K, 120K+
-        merit_bins = [
-            {"range": "0-30K", "min_value": 0, "max_value": 30000, "count": 0},
-            {"range": "30K-60K", "min_value": 30000, "max_value": 60000, "count": 0},
-            {"range": "60K-90K", "min_value": 60000, "max_value": 90000, "count": 0},
-            {"range": "90K-120K", "min_value": 90000, "max_value": 120000, "count": 0},
-            {"range": "120K+", "min_value": 120000, "max_value": float("inf"), "count": 0},
-        ]
+        contributions = [m["daily_contribution"] for m in member_data]
+        merits = [m["daily_merit"] for m in member_data]
 
-        for m in member_data:
-            contribution = m["daily_contribution"]
-            merit = m["daily_merit"]
-
-            # Count contribution bin
-            for bin_data in contribution_bins:
-                if bin_data["min_value"] <= contribution < bin_data["max_value"]:
-                    bin_data["count"] += 1
-                    break
-
-            # Count merit bin
-            for bin_data in merit_bins:
-                if bin_data["min_value"] <= merit < bin_data["max_value"]:
-                    bin_data["count"] += 1
-                    break
-
-        # Convert infinity to large number for JSON serialization
-        for bin_data in contribution_bins:
-            if bin_data["max_value"] == float("inf"):
-                bin_data["max_value"] = 999999999
-
-        for bin_data in merit_bins:
-            if bin_data["max_value"] == float("inf"):
-                bin_data["max_value"] = 999999999
+        contribution_bins = self._create_dynamic_bins(contributions, "contribution")
+        merit_bins = self._create_dynamic_bins(merits, "merit")
 
         return {
             "contribution": contribution_bins,
             "merit": merit_bins,
         }
+
+    def _create_dynamic_bins(self, values: list[float], metric_type: str) -> list[dict]:
+        """Create dynamic histogram bins based on actual data range."""
+        if not values:
+            return []
+
+        min_val = min(values)
+        max_val = max(values)
+
+        # Handle edge case where all values are the same
+        if min_val == max_val:
+            return [{"range": self._format_range(min_val, max_val + 1), "count": len(values)}]
+
+        # Calculate nice bin width (round to nearest "nice" number)
+        data_range = max_val - min_val
+        raw_bin_width = data_range / 5  # Target 5 bins
+
+        # Round to nice numbers (1, 2, 5, 10, 20, 50, 100, etc.)
+        magnitude = 10 ** int(len(str(int(raw_bin_width))) - 1) if raw_bin_width >= 1 else 1
+        nice_widths = [1, 2, 5, 10, 20, 50]
+        bin_width = magnitude * min(nice_widths, key=lambda x: abs(x * magnitude - raw_bin_width))
+
+        # Ensure reasonable bin width based on data magnitude
+        if max_val >= 1_000_000:
+            min_bin_width = 100_000  # 100K minimum for million-scale data
+        elif max_val >= 100_000:
+            min_bin_width = 10_000  # 10K minimum for 100K+ data
+        else:
+            min_bin_width = 1000 if metric_type == "contribution" else 5000
+        bin_width = max(bin_width, min_bin_width)
+
+        # Calculate bin start (round down to nearest bin_width)
+        bin_start = (int(min_val) // int(bin_width)) * int(bin_width)
+
+        # Create bins
+        bins = []
+        current = bin_start
+        while current < max_val:
+            next_val = current + bin_width
+            bins.append({
+                "range": self._format_range(current, next_val),
+                "min_value": current,
+                "max_value": next_val,
+                "count": 0,
+            })
+            current = next_val
+
+        # Count values in each bin
+        for v in values:
+            for bin_data in bins:
+                if bin_data["min_value"] <= v < bin_data["max_value"]:
+                    bin_data["count"] += 1
+                    break
+            else:
+                # Value equals max_val, put in last bin
+                if bins and v >= bins[-1]["min_value"]:
+                    bins[-1]["count"] += 1
+
+        return bins
+
+    def _format_range(self, min_val: float, max_val: float) -> str:
+        """Format range label with K/M suffix for thousands/millions."""
+        def fmt(v: float) -> str:
+            if v >= 1_000_000:
+                return f"{v / 1_000_000:.1f}M" if v % 1_000_000 != 0 else f"{v / 1_000_000:.0f}M"
+            if v >= 1000:
+                return f"{v / 1000:.0f}K" if v % 1000 == 0 else f"{v / 1000:.1f}K"
+            return str(int(v))
+
+        return f"{fmt(min_val)}-{fmt(max_val)}"
 
     def _calculate_groups_with_boxplot(self, member_data: list[dict]) -> list[dict]:
         """Calculate group stats with box plot data for all groups."""
@@ -1400,11 +1436,9 @@ class AnalyticsService:
     def _calculate_performers(
         self, member_data: list[dict]
     ) -> tuple[list[dict], list[dict]]:
-        """Calculate top and bottom performers."""
-        # Sort by daily_contribution descending
-        sorted_data = sorted(
-            member_data, key=lambda x: x["daily_contribution"], reverse=True
-        )
+        """Calculate top and bottom performers (returns all members for frontend slicing)."""
+        # Sort by rank ascending (rank 1 is best)
+        sorted_data = sorted(member_data, key=lambda x: x["rank"])
 
         def to_performer(m: dict) -> dict:
             return {
@@ -1417,8 +1451,9 @@ class AnalyticsService:
                 "rank_change": m["rank_change"],
             }
 
-        top_performers = [to_performer(m) for m in sorted_data[:10]]
-        bottom_performers = [to_performer(m) for m in sorted_data[-5:]]
+        # Return all members - top (high to low) and bottom (low to high)
+        top_performers = [to_performer(m) for m in sorted_data]
+        bottom_performers = [to_performer(m) for m in reversed(sorted_data)]
 
         return top_performers, bottom_performers
 
