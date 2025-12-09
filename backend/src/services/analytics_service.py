@@ -1147,6 +1147,7 @@ class AnalyticsService:
                     "rank": m["end_rank"],
                     "rank_change": None,  # Not applicable for season view
                     "merit_change": None,  # Not applicable for season view
+                    "assist_change": None,  # Not applicable for season view
                 })
             return result
 
@@ -1155,9 +1156,15 @@ class AnalyticsService:
         for m in latest_metrics_raw:
             member_id = UUID(m["member_id"])
             current_merit = float(Decimal(str(m["daily_merit"])))
+            current_assist = float(Decimal(str(m["daily_assist"])))
             prev_data = prev_metrics_map.get(member_id)
             merit_change = (
                 round(current_merit - prev_data["daily_merit"], 2)
+                if prev_data
+                else None
+            )
+            assist_change = (
+                round(current_assist - prev_data["daily_assist"], 2)
                 if prev_data
                 else None
             )
@@ -1168,12 +1175,13 @@ class AnalyticsService:
                 "group": m["end_group"],
                 "daily_contribution": float(Decimal(str(m["daily_contribution"]))),
                 "daily_merit": current_merit,
-                "daily_assist": float(Decimal(str(m["daily_assist"]))),
+                "daily_assist": current_assist,
                 "daily_donation": float(Decimal(str(m["daily_donation"]))),
                 "power": m["end_power"],
                 "rank": m["end_rank"],
                 "rank_change": m.get("rank_change"),
                 "merit_change": merit_change,
+                "assist_change": assist_change,
             })
 
         return result
@@ -1461,9 +1469,11 @@ class AnalyticsService:
                 "group": m["group"],
                 "daily_contribution": m["daily_contribution"],
                 "daily_merit": m["daily_merit"],
+                "daily_assist": m["daily_assist"],
                 "rank": m["rank"],
                 "rank_change": m["rank_change"],
                 "merit_change": m["merit_change"],
+                "assist_change": m["assist_change"],
             }
 
         # Return all members - top (high to low) and bottom (low to high)

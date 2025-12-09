@@ -411,9 +411,11 @@ class PerformerItem(BaseModel):
     group: str | None = Field(None, description="Group assignment")
     daily_contribution: float = Field(..., ge=0)
     daily_merit: float = Field(..., ge=0)
+    daily_assist: float = Field(..., ge=0)
     rank: int = Field(..., ge=1)
     rank_change: int | None = Field(None, description="Rank change (positive = improved)")
     merit_change: float | None = Field(None, description="Daily merit change vs previous period")
+    assist_change: float | None = Field(None, description="Daily assist change vs previous period")
 
 
 class AttentionItem(BaseModel):

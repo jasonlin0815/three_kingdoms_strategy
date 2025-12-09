@@ -331,9 +331,11 @@ export interface PerformerItem {
   readonly group: string | null
   readonly daily_contribution: number
   readonly daily_merit: number
+  readonly daily_assist: number
   readonly rank: number
   readonly rank_change: number | null
   readonly merit_change: number | null
+  readonly assist_change: number | null
 }
 
 /**

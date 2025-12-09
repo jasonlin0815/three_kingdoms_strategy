@@ -40,6 +40,9 @@ import {
   GitCompare,
   Users,
   AlertTriangle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import {
   Bar,
@@ -577,6 +580,27 @@ function GroupComparisonTab({ data }: GroupComparisonTabProps) {
 // Tab 3: Member Distribution
 // ============================================================================
 
+type SortField = 'rank' | 'name' | 'group' | 'daily_contribution' | 'daily_merit' | 'merit_change' | 'daily_assist' | 'assist_change' | 'rank_change'
+type SortDirection = 'asc' | 'desc'
+
+// Column definitions for sortable table header
+const SORT_COLUMNS: Array<{
+  field: SortField
+  label: string
+  align: 'left' | 'right'
+  showOnlyLatest?: boolean
+}> = [
+  { field: 'rank', label: '排名', align: 'left' },
+  { field: 'name', label: '成員', align: 'left' },
+  { field: 'group', label: '組別', align: 'left' },
+  { field: 'daily_contribution', label: '人日均貢獻', align: 'right' },
+  { field: 'daily_merit', label: '人日均戰功', align: 'right' },
+  { field: 'merit_change', label: '戰功變化', align: 'right', showOnlyLatest: true },
+  { field: 'daily_assist', label: '人日均助攻', align: 'right' },
+  { field: 'assist_change', label: '助攻變化', align: 'right', showOnlyLatest: true },
+  { field: 'rank_change', label: '排名變化', align: 'right', showOnlyLatest: true },
+]
+
 interface MemberDistributionTabProps {
   readonly viewMode: ViewMode
   readonly data: AllianceAnalyticsResponse
@@ -585,15 +609,63 @@ interface MemberDistributionTabProps {
 function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
   const [showTop, setShowTop] = useState(true)
   const [displayCount, setDisplayCount] = useState<string>('10')
+  const [sortField, setSortField] = useState<SortField>('rank')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   const { summary, distributions, top_performers, bottom_performers, needs_attention } = data
 
-  // Filter performers based on display count
+  // Handle column header click for sorting
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      // Default: descending for numeric values, ascending for rank/name/group
+      setSortDirection(['rank', 'name', 'group'].includes(field) ? 'asc' : 'desc')
+    }
+  }
+
+  // Render sort icon based on current state
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
+    return sortDirection === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />
+  }
+
+  // Filter and sort performers
   const displayedPerformers = useMemo(() => {
     const source = showTop ? top_performers : bottom_performers
     const count = displayCount === 'all' ? source.length : parseInt(displayCount, 10)
-    return source.slice(0, count)
-  }, [showTop, displayCount, top_performers, bottom_performers])
+
+    return [...source.slice(0, count)].sort((a, b) => {
+      const aVal = a[sortField]
+      const bVal = b[sortField]
+
+      // Null values go to end
+      if (aVal == null && bVal == null) return 0
+      if (aVal == null) return 1
+      if (bVal == null) return -1
+
+      // String vs numeric comparison
+      const isString = sortField === 'name' || sortField === 'group'
+      const diff = isString
+        ? String(aVal).localeCompare(String(bVal), 'zh-TW')
+        : Number(aVal) - Number(bVal)
+
+      return sortDirection === 'asc' ? diff : -diff
+    })
+  }, [showTop, displayCount, top_performers, bottom_performers, sortField, sortDirection])
+
+  // Render change value cell (for merit_change, assist_change)
+  const renderChangeCell = (value: number | null) => {
+    if (value == null) return <span className="text-muted-foreground">-</span>
+    return (
+      <span className={value >= 0 ? 'text-primary' : 'text-destructive'}>
+        {value >= 0 ? '+' : ''}{formatNumberCompact(value)}
+      </span>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -701,13 +773,20 @@ function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2 px-2 font-medium">排名</th>
-                  <th className="text-left py-2 px-2 font-medium">成員</th>
-                  <th className="text-left py-2 px-2 font-medium">組別</th>
-                  <th className="text-right py-2 px-2 font-medium">人日均貢獻</th>
-                  <th className="text-right py-2 px-2 font-medium">人日均戰功</th>
-                  {viewMode === 'latest' && <th className="text-right py-2 px-2 font-medium">戰功變化</th>}
-                  {viewMode === 'latest' && <th className="text-right py-2 px-2 font-medium">排名變化</th>}
+                  {SORT_COLUMNS.filter(col => !col.showOnlyLatest || viewMode === 'latest').map(col => (
+                    <th key={col.field} className="py-2 px-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col.field)}
+                        className={`flex items-center font-medium hover:text-primary transition-colors ${
+                          col.align === 'right' ? 'justify-end w-full' : ''
+                        }`}
+                      >
+                        {col.label}
+                        {renderSortIcon(col.field)}
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -719,15 +798,11 @@ function MemberDistributionTab({ viewMode, data }: MemberDistributionTabProps) {
                     <td className="py-2 px-2 text-right tabular-nums">{formatNumber(m.daily_contribution)}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{formatNumber(m.daily_merit)}</td>
                     {viewMode === 'latest' && (
-                      <td className="py-2 px-2 text-right tabular-nums">
-                        {m.merit_change != null ? (
-                          <span className={m.merit_change >= 0 ? 'text-primary' : 'text-destructive'}>
-                            {m.merit_change >= 0 ? '+' : ''}{formatNumberCompact(m.merit_change)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums">{renderChangeCell(m.merit_change)}</td>
+                    )}
+                    <td className="py-2 px-2 text-right tabular-nums">{formatNumber(m.daily_assist)}</td>
+                    {viewMode === 'latest' && (
+                      <td className="py-2 px-2 text-right tabular-nums">{renderChangeCell(m.assist_change)}</td>
                     )}
                     {viewMode === 'latest' && (
                       <td className="py-2 px-2 text-right">
