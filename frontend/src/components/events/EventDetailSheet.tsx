@@ -24,11 +24,6 @@ import {
   Users,
   Trophy,
   Swords,
-  Shield,
-  Zap,
-  Map,
-  Skull,
-  Flag,
   Clock,
   ArrowUpDown,
   ArrowUp,
@@ -37,22 +32,15 @@ import {
   XCircle,
   UserPlus,
 } from 'lucide-react'
-import {
-  Bar,
-  BarChart,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts'
+import { Bar, BarChart, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { ChartContainer, ChartConfig, ChartTooltip } from '@/components/ui/chart'
 import { formatNumber, formatNumberCompact } from '@/lib/chart-utils'
-import type {
-  BattleEvent,
-  EventSummary,
-  EventMemberMetric,
-  EventType,
-} from '@/types/event'
-import { EVENT_TYPE_CONFIG } from '@/types/event'
+import {
+  getEventIcon,
+  formatEventTime,
+  EVENT_TYPE_CONFIG,
+} from '@/lib/event-utils'
+import type { BattleEvent, EventSummary, EventMemberMetric } from '@/types/event'
 import type { DistributionBin } from '@/types/analytics'
 
 // ============================================================================
@@ -80,59 +68,6 @@ type SortDirection = 'asc' | 'desc'
 const distributionConfig = {
   count: { label: '人數', color: 'var(--primary)' },
 } satisfies ChartConfig
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function getEventIcon(eventType: EventType) {
-  switch (eventType) {
-    case 'siege':
-      return Swords
-    case 'defense':
-      return Shield
-    case 'raid':
-      return Zap
-    case 'territory':
-      return Map
-    case 'boss':
-      return Skull
-    case 'custom':
-      return Flag
-  }
-}
-
-function formatEventTime(start: string | null, end: string | null): string {
-  if (!start) return '未設定時間'
-
-  const startDate = new Date(start)
-  const dateStr = startDate.toLocaleDateString('zh-TW', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  })
-  const startTime = startDate.toLocaleTimeString('zh-TW', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  if (!end) return `${dateStr} ${startTime}`
-
-  const endDate = new Date(end)
-  const endTime = endDate.toLocaleTimeString('zh-TW', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  const durationMs = endDate.getTime() - startDate.getTime()
-  const hours = Math.floor(durationMs / (1000 * 60 * 60))
-  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60))
-  const durationStr = hours > 0 ? `${hours}小時${minutes > 0 ? minutes + '分鐘' : ''}` : `${minutes}分鐘`
-
-  return `${dateStr} ${startTime} - ${endTime} (${durationStr})`
-}
 
 // ============================================================================
 // KPI Card Component
@@ -520,7 +455,7 @@ export function EventDetailSheet({ open, onOpenChange, eventDetail }: EventDetai
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
-                  <span>{formatEventTime(event.event_start, event.event_end)}</span>
+                  <span>{formatEventTime(event.event_start, event.event_end, { includeDuration: true, includeYear: true })}</span>
                 </div>
               </SheetDescription>
             </div>

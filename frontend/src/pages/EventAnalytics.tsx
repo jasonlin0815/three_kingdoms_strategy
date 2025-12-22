@@ -2,40 +2,21 @@
  * EventAnalytics - Battle Event Performance Analytics
  *
  * Track and analyze member performance during specific battles/events.
- * Unlike daily periods, events track short-duration activities (hours)
- * with focus on participation rate and total contribution.
+ * Uses single-row CollapsibleCard design consistent with Seasons page.
  *
  * Features:
- * - Event list with summary cards
+ * - Event list with expandable quick preview
  * - Create new events with before/after snapshots
- * - Event detail view with member rankings and participation analysis
+ * - Event detail sheet with full member rankings and participation analysis
  */
 
 import { useState, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Card, CardContent } from '@/components/ui/card'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { useSeasons } from '@/hooks/use-seasons'
-import {
-  Plus,
-  Swords,
-  Shield,
-  Zap,
-  Map,
-  Skull,
-  Flag,
-  Clock,
-  ChevronRight,
-} from 'lucide-react'
+import { Plus, Swords } from 'lucide-react'
 import type {
   BattleEvent,
   EventType,
@@ -43,10 +24,9 @@ import type {
   EventSummary,
   EventMemberMetric,
 } from '@/types/event'
-import { EVENT_TYPE_CONFIG } from '@/types/event'
-import { formatNumber } from '@/lib/chart-utils'
 import { CreateEventDialog } from '@/components/events/CreateEventDialog'
 import { EventDetailSheet } from '@/components/events/EventDetailSheet'
+import { EventCard } from '@/components/events/EventCard'
 
 // ============================================================================
 // Mock Data (to be replaced with real API calls)
@@ -157,139 +137,6 @@ const MOCK_EVENT_DETAIL = {
 }
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-function getEventIcon(eventType: EventType) {
-  switch (eventType) {
-    case 'siege':
-      return Swords
-    case 'defense':
-      return Shield
-    case 'raid':
-      return Zap
-    case 'territory':
-      return Map
-    case 'boss':
-      return Skull
-    case 'custom':
-      return Flag
-  }
-}
-
-function formatEventTime(start: string | null, end: string | null): string {
-  if (!start) return '未設定時間'
-
-  const startDate = new Date(start)
-  const dateStr = startDate.toLocaleDateString('zh-TW', {
-    month: 'numeric',
-    day: 'numeric',
-  })
-  const startTime = startDate.toLocaleTimeString('zh-TW', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  if (!end) return `${dateStr} ${startTime}`
-
-  const endDate = new Date(end)
-  const endTime = endDate.toLocaleTimeString('zh-TW', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  // Calculate duration
-  const durationMs = endDate.getTime() - startDate.getTime()
-  const hours = Math.floor(durationMs / (1000 * 60 * 60))
-  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60))
-  const durationStr = hours > 0 ? `${hours}h${minutes > 0 ? minutes + 'm' : ''}` : `${minutes}m`
-
-  return `${dateStr} ${startTime}-${endTime} (${durationStr})`
-}
-
-function getEventTypeBadgeVariant(
-  eventType: EventType
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (EVENT_TYPE_CONFIG[eventType].color) {
-    case 'primary':
-      return 'default'
-    case 'blue':
-    case 'green':
-    case 'purple':
-      return 'secondary'
-    case 'yellow':
-      return 'outline'
-    default:
-      return 'secondary'
-  }
-}
-
-// ============================================================================
-// Event Card Component
-// ============================================================================
-
-interface EventCardProps {
-  readonly event: EventListItem
-  readonly onViewDetail: (eventId: string) => void
-}
-
-function EventCard({ event, onViewDetail }: EventCardProps) {
-  const Icon = getEventIcon(event.event_type)
-  const config = EVENT_TYPE_CONFIG[event.event_type]
-
-  return (
-    <Card
-      className="group cursor-pointer transition-all hover:shadow-md hover:border-primary/30"
-      onClick={() => onViewDetail(event.id)}
-    >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base font-semibold">{event.name}</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant={getEventTypeBadgeVariant(event.event_type)} className="text-xs">
-                <Icon className="h-3 w-3 mr-1" />
-                {config.label}
-              </Badge>
-            </div>
-          </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Time */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Clock className="h-4 w-4" />
-          <span>{formatEventTime(event.event_start, event.event_end)}</span>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t">
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground">參與率</div>
-            <div className="text-sm font-semibold tabular-nums">
-              {event.participation_rate != null ? `${event.participation_rate}%` : '-'}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground">總戰功</div>
-            <div className="text-sm font-semibold tabular-nums">
-              {event.total_merit != null ? formatNumber(event.total_merit) : '-'}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground">MVP</div>
-            <div className="text-sm font-semibold truncate">{event.mvp_name || '-'}</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ============================================================================
 // Empty State Component
 // ============================================================================
 
@@ -323,21 +170,19 @@ function EmptyState({ onCreateEvent }: EmptyStateProps) {
 
 function LoadingSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-4">
       {[...Array(3)].map((_, i) => (
         <Card key={i}>
-          <CardHeader className="pb-3">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-5 w-20 mt-2" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Skeleton className="h-4 w-40" />
-            <div className="grid grid-cols-3 gap-2 pt-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
+          <div className="p-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-8 rounded-lg" />
+              <div className="flex-1">
+                <Skeleton className="h-5 w-32 mb-2" />
+                <Skeleton className="h-4 w-64" />
+              </div>
+              <Skeleton className="h-8 w-8" />
             </div>
-          </CardContent>
+          </div>
         </Card>
       ))}
     </div>
@@ -351,7 +196,6 @@ function LoadingSkeleton() {
 function EventAnalytics() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
-  const [typeFilter, setTypeFilter] = useState<string>('all')
 
   // Get active season
   const { data: seasons, isLoading: seasonsLoading } = useSeasons()
@@ -361,14 +205,29 @@ function EventAnalytics() {
   const isLoading = seasonsLoading
   const events = MOCK_EVENTS
 
-  // Filter events by type
-  const filteredEvents = useMemo(() => {
-    if (typeFilter === 'all') return events
-    return events.filter((e) => e.event_type === typeFilter)
-  }, [events, typeFilter])
+  // Sort events by date (newest first)
+  const sortedEvents = useMemo(() => {
+    return [...events].sort((a, b) => {
+      const aDate = a.event_start ? new Date(a.event_start).getTime() : 0
+      const bDate = b.event_start ? new Date(b.event_start).getTime() : 0
+      return bDate - aDate
+    })
+  }, [events])
 
-  // Get selected event detail
+  // Get selected event detail (mock - in real app, fetch based on selectedEventId)
   const selectedEventDetail = selectedEventId ? MOCK_EVENT_DETAIL : null
+
+  // Get event detail for expanded cards
+  // TODO: Replace with real API hook that fetches by eventId
+  const getEventDetail = (eventId: string) => {
+    // Mock: return same data regardless of eventId (real impl would fetch)
+    void eventId
+    return {
+      summary: MOCK_EVENT_DETAIL.summary,
+      metrics: MOCK_EVENT_DETAIL.metrics,
+      merit_distribution: MOCK_EVENT_DETAIL.merit_distribution,
+    }
+  }
 
   const handleViewDetail = (eventId: string) => {
     setSelectedEventId(eventId)
@@ -386,10 +245,17 @@ function EventAnalytics() {
     <AllianceGuard>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">事件分析</h2>
-            <p className="text-muted-foreground mt-1">追蹤特定戰役或事件的成員表現</p>
+            <p className="text-muted-foreground mt-1">
+              追蹤特定戰役或事件的成員表現
+              {activeSeason && (
+                <span className="ml-2">
+                  · 賽季: <span className="font-medium text-foreground">{activeSeason.name}</span>
+                </span>
+              )}
+            </p>
           </div>
           <Button onClick={handleCreateEvent}>
             <Plus className="h-4 w-4 mr-2" />
@@ -397,45 +263,24 @@ function EventAnalytics() {
           </Button>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">類型:</span>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-32 h-8">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="siege">攻城戰</SelectItem>
-                <SelectItem value="defense">守城戰</SelectItem>
-                <SelectItem value="raid">突襲</SelectItem>
-                <SelectItem value="territory">領土爭奪</SelectItem>
-                <SelectItem value="boss">世界BOSS</SelectItem>
-                <SelectItem value="custom">自訂</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {activeSeason && (
-            <div className="text-sm text-muted-foreground">
-              賽季: <span className="font-medium text-foreground">{activeSeason.name}</span>
-            </div>
-          )}
-        </div>
-
         {/* Loading State */}
         {isLoading && <LoadingSkeleton />}
 
         {/* Empty State */}
-        {!isLoading && filteredEvents.length === 0 && (
+        {!isLoading && sortedEvents.length === 0 && (
           <EmptyState onCreateEvent={handleCreateEvent} />
         )}
 
-        {/* Event Grid */}
-        {!isLoading && filteredEvents.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} onViewDetail={handleViewDetail} />
+        {/* Event List */}
+        {!isLoading && sortedEvents.length > 0 && (
+          <div className="space-y-4">
+            {sortedEvents.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                eventDetail={getEventDetail(event.id)}
+                onViewDetail={handleViewDetail}
+              />
             ))}
           </div>
         )}
