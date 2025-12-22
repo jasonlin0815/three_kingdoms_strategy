@@ -10,8 +10,19 @@ from src.api.v1.schemas.analytics import (
     MemberTrendItem,
     SeasonSummaryResponse,
 )
+from src.api.v1.schemas.events import (
+    CreateEventRequest,
+    DistributionBinResponse,
+    EventAnalyticsResponse,
+    EventDetailResponse,
+    EventListItemResponse,
+    EventMemberMetricResponse,
+    EventSummaryResponse,
+    ProcessEventRequest,
+)
 
 __all__ = [
+    # Analytics schemas
     "AllianceAveragesResponse",
     "AllianceMetricsAverage",
     "AllianceTrendItem",
@@ -20,4 +31,13 @@ __all__ = [
     "MemberMetricsSnapshot",
     "MemberTrendItem",
     "SeasonSummaryResponse",
+    # Event schemas
+    "CreateEventRequest",
+    "DistributionBinResponse",
+    "EventAnalyticsResponse",
+    "EventDetailResponse",
+    "EventListItemResponse",
+    "EventMemberMetricResponse",
+    "EventSummaryResponse",
+    "ProcessEventRequest",
 ]

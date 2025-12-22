@@ -54,7 +54,6 @@ export interface BattleEvent {
   readonly name: string
   readonly event_type: EventType
   readonly description: string | null
-  readonly expected_participants: number | null
   readonly before_upload_id: string | null
   readonly after_upload_id: string | null
   readonly event_start: string | null // ISO timestamp
@@ -73,7 +72,6 @@ export interface EventSummary {
   readonly absent_count: number
   readonly new_member_count: number
   readonly participation_rate: number
-  readonly expected_participants: number | null
 
   // Aggregate metrics
   readonly total_merit: number
@@ -83,9 +81,9 @@ export interface EventSummary {
   readonly avg_assist: number
 
   // MVP info
-  readonly mvp_member_id: string
-  readonly mvp_member_name: string
-  readonly mvp_merit: number
+  readonly mvp_member_id: string | null
+  readonly mvp_member_name: string | null
+  readonly mvp_merit: number | null
 }
 
 /**
@@ -143,7 +141,6 @@ export interface CreateEventRequest {
   readonly name: string
   readonly event_type: EventType
   readonly description?: string
-  readonly expected_participants?: number
 }
 
 /**

@@ -180,7 +180,7 @@ function OverviewTab({ summary, distribution }: OverviewTabProps) {
         <KpiCard
           title="參與率"
           value={`${summary.participation_rate}%`}
-          subtitle={`${summary.participated_count}/${summary.expected_participants || summary.total_members} 人`}
+          subtitle={`${summary.participated_count}/${summary.total_members - summary.new_member_count} 人`}
           icon={<Users className="h-5 w-5" />}
           highlight
         />
@@ -192,8 +192,8 @@ function OverviewTab({ summary, distribution }: OverviewTabProps) {
         />
         <KpiCard
           title="MVP"
-          value={summary.mvp_member_name}
-          subtitle={`${formatNumber(summary.mvp_merit)} 戰功`}
+          value={summary.mvp_member_name ?? '-'}
+          subtitle={summary.mvp_merit != null ? `${formatNumber(summary.mvp_merit)} 戰功` : undefined}
           icon={<Trophy className="h-5 w-5" />}
         />
         <KpiCard

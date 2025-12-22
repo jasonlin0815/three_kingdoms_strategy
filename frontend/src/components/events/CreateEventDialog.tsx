@@ -2,7 +2,7 @@
  * CreateEventDialog - Multi-step wizard for creating battle events
  *
  * Steps:
- * 1. Basic Info: Event name, type, expected participants
+ * 1. Basic Info: Event name, type, description
  * 2. Before Snapshot: Upload CSV for pre-event data
  * 3. After Snapshot: Upload CSV for post-event data
  * 4. Confirm: Preview and create
@@ -56,7 +56,6 @@ interface FormData {
   name: string
   eventType: EventType
   description: string
-  expectedParticipants: string
   beforeFile: File | null
   afterFile: File | null
 }
@@ -152,20 +151,6 @@ function InfoStep({ formData, onChange }: InfoStepProps) {
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="expectedParticipants">預期參戰人數</Label>
-        <Input
-          id="expectedParticipants"
-          type="number"
-          placeholder="用於計算出席率"
-          value={formData.expectedParticipants}
-          onChange={(e) => onChange({ expectedParticipants: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">
-          如未設定，將使用快照成員數計算出席率
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -291,12 +276,6 @@ function ConfirmStep({ formData }: ConfirmStepProps) {
               <span className="text-muted-foreground">類型</span>
               <span className="font-medium">{EVENT_TYPE_CONFIG[formData.eventType].label}</span>
             </div>
-            {formData.expectedParticipants && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">預期參戰人數</span>
-                <span className="font-medium">{formData.expectedParticipants} 人</span>
-              </div>
-            )}
             {formData.description && (
               <div className="pt-2 border-t">
                 <span className="text-muted-foreground text-sm">描述</span>
@@ -379,7 +358,6 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
     name: '',
     eventType: 'siege',
     description: '',
-    expectedParticipants: '',
     beforeFile: null,
     afterFile: null,
   })
@@ -413,7 +391,6 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
       name: '',
       eventType: 'siege',
       description: '',
-      expectedParticipants: '',
       beforeFile: null,
       afterFile: null,
     })
@@ -428,7 +405,6 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
         name: '',
         eventType: 'siege',
         description: '',
-        expectedParticipants: '',
         beforeFile: null,
         afterFile: null,
       })

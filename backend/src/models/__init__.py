@@ -5,6 +5,20 @@ Export all models for easy import
 """
 
 from src.models.alliance import Alliance, AllianceCreate, AllianceUpdate
+from src.models.battle_event import (
+    BattleEvent,
+    BattleEventCreate,
+    BattleEventListItem,
+    BattleEventUpdate,
+    EventStatus,
+    EventType,
+)
+from src.models.battle_event_metrics import (
+    BattleEventMetrics,
+    BattleEventMetricsCreate,
+    BattleEventMetricsWithMember,
+    EventSummary,
+)
 from src.models.csv_upload import CsvUpload, CsvUploadCreate, CsvUploadUpdate
 from src.models.member import Member, MemberCreate, MemberUpdate
 from src.models.member_period_metrics import (
@@ -26,6 +40,18 @@ __all__ = [
     "Alliance",
     "AllianceCreate",
     "AllianceUpdate",
+    # Battle Event models
+    "BattleEvent",
+    "BattleEventCreate",
+    "BattleEventUpdate",
+    "BattleEventListItem",
+    "EventType",
+    "EventStatus",
+    # Battle Event Metrics models
+    "BattleEventMetrics",
+    "BattleEventMetricsCreate",
+    "BattleEventMetricsWithMember",
+    "EventSummary",
     # Season models
     "Season",
     "SeasonCreate",
