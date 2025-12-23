@@ -13,17 +13,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class EventType(str, Enum):
-    """Battle event type classification"""
-
-    SIEGE = "siege"  # 攻城戰
-    DEFENSE = "defense"  # 守城戰
-    RAID = "raid"  # 突襲
-    TERRITORY = "territory"  # 領土爭奪
-    BOSS = "boss"  # 世界BOSS
-    CUSTOM = "custom"  # 自訂
-
-
 class EventStatus(str, Enum):
     """Event processing status"""
 
@@ -36,7 +25,7 @@ class BattleEventBase(BaseModel):
     """Base battle event model with common fields"""
 
     name: str = Field(..., min_length=1, max_length=100, description="Event name")
-    event_type: EventType = Field(..., description="Type of battle event")
+    event_type: str | None = Field(None, max_length=50, description="Optional event type label")
     description: str | None = Field(None, max_length=500, description="Event description")
     event_start: datetime | None = Field(None, description="Event start timestamp")
     event_end: datetime | None = Field(None, description="Event end timestamp")
@@ -54,7 +43,7 @@ class BattleEventUpdate(BaseModel):
     """Battle event update model - all fields optional"""
 
     name: str | None = Field(None, min_length=1, max_length=100)
-    event_type: EventType | None = None
+    event_type: str | None = Field(None, max_length=50)
     description: str | None = None
     event_start: datetime | None = None
     event_end: datetime | None = None
@@ -85,7 +74,7 @@ class BattleEventListItem(BaseModel):
 
     id: UUID
     name: str
-    event_type: EventType
+    event_type: str | None
     status: EventStatus
     event_start: datetime | None
     event_end: datetime | None

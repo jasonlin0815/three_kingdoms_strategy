@@ -38,7 +38,7 @@ import { formatNumber, formatNumberCompact } from '@/lib/chart-utils'
 import {
   getEventIcon,
   formatEventTime,
-  EVENT_TYPE_CONFIG,
+  getEventTypeLabel,
 } from '@/lib/event-utils'
 import type { BattleEvent, EventSummary, EventMemberMetric } from '@/types/event'
 import type { DistributionBin } from '@/types/analytics'
@@ -436,8 +436,8 @@ export function EventDetailSheet({ open, onOpenChange, eventDetail }: EventDetai
   if (!eventDetail) return null
 
   const { event, summary, metrics, merit_distribution } = eventDetail
-  const Icon = getEventIcon(event.event_type)
-  const config = EVENT_TYPE_CONFIG[event.event_type]
+  const Icon = getEventIcon()
+  const eventTypeLabel = getEventTypeLabel(event.event_type)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -447,12 +447,14 @@ export function EventDetailSheet({ open, onOpenChange, eventDetail }: EventDetai
             <div>
               <SheetTitle className="text-xl">{event.name}</SheetTitle>
               <SheetDescription className="mt-2 space-y-1">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">
-                    <Icon className="h-3 w-3 mr-1" />
-                    {config.label}
-                  </Badge>
-                </div>
+                {eventTypeLabel && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">
+                      <Icon className="h-3 w-3 mr-1" />
+                      {eventTypeLabel}
+                    </Badge>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
                   <span>{formatEventTime(event.event_start, event.event_end, { includeDuration: true, includeYear: true })}</span>

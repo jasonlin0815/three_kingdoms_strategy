@@ -7,36 +7,35 @@
  * - EventAnalytics.tsx
  */
 
-import {
-  Swords,
-  Shield,
-  Zap,
-  Map,
-  Skull,
-  Flag,
-  type LucideIcon,
-} from 'lucide-react'
-import type { EventType } from '@/types/event'
-import { EVENT_TYPE_CONFIG } from '@/types/event'
+import { Swords, type LucideIcon } from 'lucide-react'
 
 /**
- * Get the appropriate icon component for an event type
+ * Legacy event type labels for backward compatibility
  */
-export function getEventIcon(eventType: EventType): LucideIcon {
-  switch (eventType) {
-    case 'siege':
-      return Swords
-    case 'defense':
-      return Shield
-    case 'raid':
-      return Zap
-    case 'territory':
-      return Map
-    case 'boss':
-      return Skull
-    case 'custom':
-      return Flag
-  }
+const LEGACY_EVENT_TYPE_LABELS: Record<string, string> = {
+  siege: '攻城戰',
+  defense: '守城戰',
+  raid: '突襲',
+  territory: '領土爭奪',
+  boss: '世界BOSS',
+  custom: '自訂',
+}
+
+/**
+ * Get display label for event type
+ * Returns the label for legacy enum values, or the custom string as-is
+ */
+export function getEventTypeLabel(eventType: string | null): string | null {
+  if (!eventType) return null
+  return LEGACY_EVENT_TYPE_LABELS[eventType] ?? eventType
+}
+
+/**
+ * Get the icon component for an event
+ * Uses Swords as the default icon for all events
+ */
+export function getEventIcon(): LucideIcon {
+  return Swords
 }
 
 /**
@@ -93,24 +92,9 @@ export function formatEventTime(
 }
 
 /**
- * Get badge variant for event type
+ * Get badge variant for event type display
+ * Returns 'secondary' for all event types (simplified)
  */
-export function getEventTypeBadgeVariant(
-  eventType: EventType
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (EVENT_TYPE_CONFIG[eventType].color) {
-    case 'primary':
-      return 'default'
-    case 'blue':
-    case 'green':
-    case 'purple':
-      return 'secondary'
-    case 'yellow':
-      return 'outline'
-    default:
-      return 'secondary'
-  }
+export function getEventTypeBadgeVariant(): 'secondary' {
+  return 'secondary'
 }
-
-// Re-export EVENT_TYPE_CONFIG for convenience
-export { EVENT_TYPE_CONFIG }

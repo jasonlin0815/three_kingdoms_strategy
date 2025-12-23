@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.models.battle_event import EventStatus, EventType
+from src.models.battle_event import EventStatus
 
 # ============================================================================
 # Request Schemas
@@ -25,7 +25,7 @@ class CreateEventRequest(BaseModel):
     """Request body for creating a new battle event"""
 
     name: str = Field(..., min_length=1, max_length=100, description="Event name")
-    event_type: EventType = Field(..., description="Type of battle event")
+    event_type: str | None = Field(None, max_length=50, description="Optional event type label")
     description: str | None = Field(None, max_length=500, description="Event description")
 
 
@@ -48,7 +48,7 @@ class EventListItemResponse(BaseModel):
 
     id: UUID
     name: str
-    event_type: EventType
+    event_type: str | None
     status: EventStatus
     event_start: datetime | None
     event_end: datetime | None
@@ -65,7 +65,7 @@ class EventDetailResponse(BaseModel):
 
     id: UUID
     name: str
-    event_type: EventType
+    event_type: str | None
     description: str | None
     status: EventStatus
     event_start: datetime | None

@@ -18,7 +18,7 @@ import {
   getEventIcon,
   formatEventTime,
   getEventTypeBadgeVariant,
-  EVENT_TYPE_CONFIG,
+  getEventTypeLabel,
 } from '@/lib/event-utils'
 import type { EventListItem, EventSummary, EventMemberMetric } from '@/types/event'
 import type { DistributionBin } from '@/types/analytics'
@@ -176,8 +176,8 @@ function ExpandedContent({ eventId, eventDetail, onViewDetail }: ExpandedContent
 // ============================================================================
 
 export function EventCard({ event, eventDetail, onViewDetail }: EventCardProps) {
-  const Icon = getEventIcon(event.event_type)
-  const config = EVENT_TYPE_CONFIG[event.event_type]
+  const Icon = getEventIcon()
+  const eventTypeLabel = getEventTypeLabel(event.event_type)
 
   const handleViewDetail = useCallback(() => {
     onViewDetail(event.id)
@@ -193,11 +193,12 @@ export function EventCard({ event, eventDetail, onViewDetail }: EventCardProps) 
 
   const icon = <Icon className="h-4 w-4" />
 
-  const badge = (
-    <Badge variant={getEventTypeBadgeVariant(event.event_type)} className="text-xs">
-      {config.label}
+  // Only show badge if event_type exists
+  const badge = eventTypeLabel ? (
+    <Badge variant={getEventTypeBadgeVariant()} className="text-xs">
+      {eventTypeLabel}
     </Badge>
-  )
+  ) : null
 
   const actions = (
     <Button
