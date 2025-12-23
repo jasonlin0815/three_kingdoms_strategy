@@ -58,7 +58,7 @@ interface EventDetailSheetProps {
   } | null
 }
 
-type SortField = 'member_name' | 'group' | 'merit_diff' | 'assist_diff' | 'contribution_diff'
+type SortField = 'member_name' | 'group_name' | 'merit_diff' | 'assist_diff' | 'contribution_diff'
 type SortDirection = 'asc' | 'desc'
 
 // ============================================================================
@@ -222,7 +222,7 @@ function MemberRankingTab({ metrics }: MemberRankingTabProps) {
       if (aVal == null) return 1
       if (bVal == null) return -1
 
-      const isString = sortField === 'member_name' || sortField === 'group'
+      const isString = sortField === 'member_name' || sortField === 'group_name'
       const diff = isString
         ? String(aVal).localeCompare(String(bVal), 'zh-TW')
         : Number(aVal) - Number(bVal)
@@ -281,11 +281,11 @@ function MemberRankingTab({ metrics }: MemberRankingTabProps) {
               <th className="py-2 px-2 text-left">
                 <button
                   type="button"
-                  onClick={() => handleSort('group')}
+                  onClick={() => handleSort('group_name')}
                   className="flex items-center font-medium hover:text-primary"
                 >
                   組別
-                  {renderSortIcon('group')}
+                  {renderSortIcon('group_name')}
                 </button>
               </th>
               <th className="py-2 px-2 text-right">
@@ -330,7 +330,7 @@ function MemberRankingTab({ metrics }: MemberRankingTabProps) {
                     <span className="font-medium">{m.member_name}</span>
                   </div>
                 </td>
-                <td className="py-2 px-2 text-muted-foreground">{m.group || '-'}</td>
+                <td className="py-2 px-2 text-muted-foreground">{m.group_name || '-'}</td>
                 <td className="py-2 px-2 text-right tabular-nums font-medium">
                   {formatNumber(m.merit_diff)}
                 </td>

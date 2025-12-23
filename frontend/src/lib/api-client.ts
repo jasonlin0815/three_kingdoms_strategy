@@ -36,6 +36,12 @@ import type {
   GroupComparisonItem,
   AllianceAnalyticsResponse
 } from '@/types/analytics'
+import type {
+  BattleEvent,
+  EventListItem,
+  EventAnalyticsResponse,
+  CreateEventRequest,
+} from '@/types/event'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8087'
 
@@ -538,6 +544,71 @@ class ApiClient {
       }
     )
     return response.data
+  }
+
+  // ==================== Event API ====================
+
+  /**
+   * Get all events for a season
+   */
+  async getEvents(seasonId: string): Promise<EventListItem[]> {
+    const response = await this.client.get<EventListItem[]>('/api/v1/events', {
+      params: { season_id: seasonId }
+    })
+    return response.data
+  }
+
+  /**
+   * Get event details by ID
+   */
+  async getEvent(eventId: string): Promise<BattleEvent> {
+    const response = await this.client.get<BattleEvent>(`/api/v1/events/${eventId}`)
+    return response.data
+  }
+
+  /**
+   * Get complete event analytics
+   */
+  async getEventAnalytics(eventId: string): Promise<EventAnalyticsResponse> {
+    const response = await this.client.get<EventAnalyticsResponse>(
+      `/api/v1/events/${eventId}/analytics`
+    )
+    return response.data
+  }
+
+  /**
+   * Create a new battle event
+   */
+  async createEvent(seasonId: string, data: CreateEventRequest): Promise<BattleEvent> {
+    const response = await this.client.post<BattleEvent>('/api/v1/events', data, {
+      params: { season_id: seasonId }
+    })
+    return response.data
+  }
+
+  /**
+   * Process event snapshots (calculate metrics from before/after uploads)
+   */
+  async processEvent(
+    eventId: string,
+    beforeUploadId: string,
+    afterUploadId: string
+  ): Promise<BattleEvent> {
+    const response = await this.client.post<BattleEvent>(
+      `/api/v1/events/${eventId}/process`,
+      {
+        before_upload_id: beforeUploadId,
+        after_upload_id: afterUploadId
+      }
+    )
+    return response.data
+  }
+
+  /**
+   * Delete an event
+   */
+  async deleteEvent(eventId: string): Promise<void> {
+    await this.client.delete(`/api/v1/events/${eventId}`)
   }
 }
 

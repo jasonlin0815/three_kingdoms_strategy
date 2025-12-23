@@ -93,7 +93,7 @@ export interface EventMemberMetric {
   readonly id: string
   readonly member_id: string
   readonly member_name: string
-  readonly group: string | null
+  readonly group_name: string | null
 
   // Diff values (after - before)
   readonly contribution_diff: number

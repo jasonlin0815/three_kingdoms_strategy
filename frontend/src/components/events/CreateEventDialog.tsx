@@ -6,6 +6,12 @@
  * 2. Before Snapshot: Upload CSV for pre-event data
  * 3. After Snapshot: Upload CSV for post-event data
  * 4. Confirm: Preview and create
+ *
+ * Flow:
+ * 1. Upload before CSV -> get beforeUploadId
+ * 2. Upload after CSV -> get afterUploadId
+ * 3. Create event
+ * 4. Process event with both upload IDs
  */
 
 import { useState } from 'react'
@@ -35,12 +41,13 @@ import {
   Upload,
   CheckCircle2,
   FileSpreadsheet,
-  Users,
-  Trophy,
-  Swords,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import type { EventType } from '@/types/event'
 import { EVENT_TYPE_CONFIG } from '@/types/event'
+import { useUploadCsv } from '@/hooks/use-csv-uploads'
+import { useCreateEvent, useProcessEvent } from '@/hooks/use-events'
 
 // ============================================================================
 // Types
@@ -176,9 +183,10 @@ interface SnapshotStepProps {
   readonly description: string
   readonly file: File | null
   readonly onFileChange: (file: File | null) => void
+  readonly inputId: string
 }
 
-function SnapshotStep({ label, description, file, onFileChange }: SnapshotStepProps) {
+function SnapshotStep({ label, description, file, onFileChange, inputId }: SnapshotStepProps) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     const droppedFile = e.dataTransfer.files[0]
@@ -212,9 +220,9 @@ function SnapshotStep({ label, description, file, onFileChange }: SnapshotStepPr
             accept=".csv"
             onChange={handleFileInput}
             className="hidden"
-            id="csv-upload"
+            id={inputId}
           />
-          <label htmlFor="csv-upload" className="cursor-pointer">
+          <label htmlFor={inputId} className="cursor-pointer">
             <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
             <p className="text-sm font-medium mb-1">拖放 CSV 檔案到這裡</p>
             <p className="text-xs text-muted-foreground">或點擊選擇檔案</p>
@@ -244,7 +252,7 @@ function SnapshotStep({ label, description, file, onFileChange }: SnapshotStepPr
             </div>
             <div className="mt-3 flex items-center gap-2 text-sm text-primary">
               <CheckCircle2 className="h-4 w-4" />
-              <span>已選擇檔案 (實際解析將在建立時進行)</span>
+              <span>已選擇檔案</span>
             </div>
           </CardContent>
         </Card>
@@ -259,11 +267,20 @@ function SnapshotStep({ label, description, file, onFileChange }: SnapshotStepPr
 
 interface ConfirmStepProps {
   readonly formData: FormData
+  readonly isProcessing: boolean
+  readonly error: string | null
 }
 
-function ConfirmStep({ formData }: ConfirmStepProps) {
+function ConfirmStep({ formData, isProcessing, error }: ConfirmStepProps) {
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
+
       <div>
         <h4 className="font-medium mb-3">事件摘要</h4>
         <Card>
@@ -314,36 +331,12 @@ function ConfirmStep({ formData }: ConfirmStepProps) {
         </div>
       </div>
 
-      {/* Preview Stats (Mock) */}
-      <div>
-        <h4 className="font-medium mb-3">預估分析結果</h4>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Card>
-            <CardContent className="py-3 text-center">
-              <Users className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-              <div className="text-lg font-bold">85%</div>
-              <div className="text-xs text-muted-foreground">預估參與率</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="py-3 text-center">
-              <Swords className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-              <div className="text-lg font-bold">1.2M</div>
-              <div className="text-xs text-muted-foreground">預估總戰功</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="py-3 text-center">
-              <Trophy className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-              <div className="text-lg font-bold">8,500</div>
-              <div className="text-xs text-muted-foreground">預估平均戰功</div>
-            </CardContent>
-          </Card>
+      {isProcessing && (
+        <div className="flex items-center justify-center gap-2 py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">正在建立事件並分析數據...</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          * 實際結果將在建立事件後計算
-        </p>
-      </div>
+      )}
     </div>
   )
 }
@@ -352,7 +345,7 @@ function ConfirmStep({ formData }: ConfirmStepProps) {
 // Main Component
 // ============================================================================
 
-export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps) {
+export function CreateEventDialog({ open, onOpenChange, seasonId }: CreateEventDialogProps) {
   const [currentStep, setCurrentStep] = useState<Step>('info')
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -361,10 +354,30 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
     beforeFile: null,
     afterFile: null,
   })
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Mutations
+  const uploadCsv = useUploadCsv()
+  const createEvent = useCreateEvent(seasonId)
+  const processEvent = useProcessEvent()
 
   const currentIndex = STEPS.indexOf(currentStep)
   const isFirstStep = currentIndex === 0
   const isLastStep = currentIndex === STEPS.length - 1
+
+  const resetForm = () => {
+    setCurrentStep('info')
+    setFormData({
+      name: '',
+      eventType: 'siege',
+      description: '',
+      beforeFile: null,
+      afterFile: null,
+    })
+    setError(null)
+    setIsProcessing(false)
+  }
 
   const handleChange = (updates: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...updates }))
@@ -373,6 +386,7 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
   const handlePrevious = () => {
     if (currentIndex > 0) {
       setCurrentStep(STEPS[currentIndex - 1])
+      setError(null)
     }
   }
 
@@ -382,33 +396,58 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
     }
   }
 
-  const handleCreate = () => {
-    // TODO: Implement actual API call
-    onOpenChange(false)
-    // Reset form
-    setCurrentStep('info')
-    setFormData({
-      name: '',
-      eventType: 'siege',
-      description: '',
-      beforeFile: null,
-      afterFile: null,
-    })
+  const handleCreate = async () => {
+    if (!seasonId || !formData.beforeFile || !formData.afterFile) {
+      setError('缺少必要資料')
+      return
+    }
+
+    setIsProcessing(true)
+    setError(null)
+
+    try {
+      // 1. Upload before file
+      const beforeUpload = await uploadCsv.mutateAsync({
+        seasonId,
+        file: formData.beforeFile,
+      })
+
+      // 2. Upload after file
+      const afterUpload = await uploadCsv.mutateAsync({
+        seasonId,
+        file: formData.afterFile,
+      })
+
+      // 3. Create event
+      const event = await createEvent.mutateAsync({
+        name: formData.name,
+        event_type: formData.eventType,
+        description: formData.description || undefined,
+      })
+
+      // 4. Process event with both upload IDs
+      await processEvent.mutateAsync({
+        eventId: event.id,
+        beforeUploadId: beforeUpload.upload_id,
+        afterUploadId: afterUpload.upload_id,
+      })
+
+      // Success - close dialog and reset
+      onOpenChange(false)
+      resetForm()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '建立事件時發生錯誤'
+      setError(message)
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleClose = () => {
+    if (isProcessing) return // Prevent closing while processing
     onOpenChange(false)
     // Reset form after close animation
-    setTimeout(() => {
-      setCurrentStep('info')
-      setFormData({
-        name: '',
-        eventType: 'siege',
-        description: '',
-        beforeFile: null,
-        afterFile: null,
-      })
-    }, 300)
+    setTimeout(resetForm, 300)
   }
 
   // Validation for next button
@@ -421,7 +460,7 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
       case 'after':
         return formData.afterFile !== null
       case 'confirm':
-        return true
+        return !isProcessing
       default:
         return false
     }
@@ -449,6 +488,7 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
               description="請上傳事件開始前的同盟成員數據"
               file={formData.beforeFile}
               onFileChange={(file) => handleChange({ beforeFile: file })}
+              inputId="csv-upload-before"
             />
           )}
           {currentStep === 'after' && (
@@ -457,9 +497,12 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
               description="請上傳事件結束後的同盟成員數據"
               file={formData.afterFile}
               onFileChange={(file) => handleChange({ afterFile: file })}
+              inputId="csv-upload-after"
             />
           )}
-          {currentStep === 'confirm' && <ConfirmStep formData={formData} />}
+          {currentStep === 'confirm' && (
+            <ConfirmStep formData={formData} isProcessing={isProcessing} error={error} />
+          )}
         </div>
 
         {/* Navigation Buttons */}
@@ -467,6 +510,7 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
           <Button
             variant="outline"
             onClick={isFirstStep ? handleClose : handlePrevious}
+            disabled={isProcessing}
           >
             {isFirstStep ? (
               '取消'
@@ -478,8 +522,15 @@ export function CreateEventDialog({ open, onOpenChange }: CreateEventDialogProps
             )}
           </Button>
           {isLastStep ? (
-            <Button onClick={handleCreate} disabled={!canProceed()}>
-              建立事件
+            <Button onClick={handleCreate} disabled={!canProceed() || isProcessing}>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  處理中...
+                </>
+              ) : (
+                '建立事件'
+              )}
             </Button>
           ) : (
             <Button onClick={handleNext} disabled={!canProceed()}>
