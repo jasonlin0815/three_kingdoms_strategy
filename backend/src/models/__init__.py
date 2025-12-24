@@ -11,7 +11,6 @@ from src.models.battle_event import (
     BattleEventListItem,
     BattleEventUpdate,
     EventStatus,
-    EventType,
 )
 from src.models.battle_event_metrics import (
     BattleEventMetrics,
@@ -45,7 +44,6 @@ __all__ = [
     "BattleEventCreate",
     "BattleEventUpdate",
     "BattleEventListItem",
-    "EventType",
     "EventStatus",
     # Battle Event Metrics models
     "BattleEventMetrics",
