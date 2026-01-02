@@ -32,6 +32,7 @@ from src.repositories.line_binding_repository import LineBindingRepository
 BINDING_CODE_LENGTH = 6
 BINDING_CODE_EXPIRY_MINUTES = 5
 MAX_CODES_PER_HOUR = 3
+GROUP_REMINDER_COOLDOWN_MINUTES = 30  # Auto-reminder cooldown per group
 # Remove confusing characters: 0, O, I, 1
 BINDING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -407,3 +408,60 @@ class LineBindingService:
             "member_count": member_count,
             "bound_at": group_binding.bound_at.strftime("%Y-%m-%d %H:%M")
         }
+
+    # =========================================================================
+    # Auto-Reminder Operations (Webhook)
+    # =========================================================================
+
+    async def should_send_binding_reminder(
+        self,
+        line_group_id: str,
+        line_user_id: str
+    ) -> bool:
+        """
+        Check if we should send an auto-reminder to register game ID
+
+        Conditions for sending:
+        1. Group is bound to an alliance
+        2. User has NOT registered any game ID
+        3. Group hasn't received a reminder in the last 30 minutes
+
+        Args:
+            line_group_id: LINE group ID
+            line_user_id: LINE user ID of the message sender
+
+        Returns:
+            True if reminder should be sent
+        """
+        # Check if group is bound
+        group_binding = await self.repository.get_group_binding_by_line_group_id(
+            line_group_id
+        )
+        if not group_binding:
+            return False
+
+        # Check if user already registered
+        is_registered = await self.repository.is_user_registered_in_group(
+            line_group_id=line_group_id,
+            line_user_id=line_user_id
+        )
+        if is_registered:
+            return False
+
+        # Check group cooldown (30 minutes)
+        last_reminder = await self.repository.get_group_reminder_cooldown(line_group_id)
+        if last_reminder:
+            cooldown_end = last_reminder + timedelta(minutes=GROUP_REMINDER_COOLDOWN_MINUTES)
+            if datetime.utcnow().replace(tzinfo=last_reminder.tzinfo) < cooldown_end:
+                return False
+
+        return True
+
+    async def update_group_reminder_cooldown(self, line_group_id: str) -> None:
+        """
+        Update the group reminder cooldown timestamp
+
+        Args:
+            line_group_id: LINE group ID
+        """
+        await self.repository.upsert_group_reminder_cooldown(line_group_id)

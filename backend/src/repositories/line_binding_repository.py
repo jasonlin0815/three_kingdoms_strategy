@@ -315,3 +315,55 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         if not data:
             return None
         return UUID(data["id"])
+
+    # =========================================================================
+    # Group Reminder Cooldown Operations
+    # =========================================================================
+
+    async def get_group_reminder_cooldown(
+        self,
+        line_group_id: str
+    ) -> datetime | None:
+        """Get last reminder time for a group"""
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("line_group_reminder_cooldowns")
+            .select("last_reminder_at")
+            .eq("line_group_id", line_group_id)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True, expect_single=True)
+        if not data:
+            return None
+        return datetime.fromisoformat(data["last_reminder_at"].replace("Z", "+00:00"))
+
+    async def upsert_group_reminder_cooldown(self, line_group_id: str) -> None:
+        """Update or insert group reminder cooldown timestamp"""
+        await self._execute_async(
+            lambda: self.client
+            .from_("line_group_reminder_cooldowns")
+            .upsert({
+                "line_group_id": line_group_id,
+                "last_reminder_at": datetime.utcnow().isoformat()
+            })
+            .execute()
+        )
+
+    async def is_user_registered_in_group(
+        self,
+        line_group_id: str,
+        line_user_id: str
+    ) -> bool:
+        """Check if a LINE user has any registered game IDs in the group's alliance"""
+        # First get the alliance for this group
+        group_binding = await self.get_group_binding_by_line_group_id(line_group_id)
+        if not group_binding:
+            return False
+
+        # Check if user has any bindings
+        bindings = await self.get_member_bindings_by_line_user(
+            alliance_id=group_binding.alliance_id,
+            line_user_id=line_user_id
+        )
+        return len(bindings) > 0

@@ -367,11 +367,6 @@ async def _handle_event(
             line_user_id=line_user_id,
             reply_token=reply_token,
             service=service,
-        )
-    elif text in ("/綁定ID", "/绑定ID", "/綁定id", "/绑定id"):
-        await _handle_bind_id_command(
-            line_group_id=line_group_id,
-            reply_token=reply_token,
             settings=settings,
         )
     elif text in ("/狀態", "/状态"):
@@ -382,6 +377,15 @@ async def _handle_event(
         )
     elif text in ("/幫助", "/帮助", "/help"):
         await _handle_help_command(reply_token=reply_token)
+    else:
+        # Auto-reminder for unregistered users (non-command messages)
+        await _maybe_send_binding_reminder(
+            line_group_id=line_group_id,
+            line_user_id=line_user_id,
+            reply_token=reply_token,
+            service=service,
+            settings=settings,
+        )
 
 
 async def _handle_bind_command(
@@ -390,41 +394,140 @@ async def _handle_bind_command(
     line_user_id: str,
     reply_token: str,
     service: LineBindingService,
+    settings: Settings,
 ) -> None:
-    """Handle /綁定 command"""
+    """Handle /綁定 command - bind group and send welcome message with LIFF button"""
     success, message, alliance_id = await service.validate_and_bind_group(
         code=code,
         line_group_id=line_group_id,
         line_user_id=line_user_id,
     )
 
-    if success:
-        reply_text = (
-            "✅ 綁定成功！\n\n"
-            "盟友們可以發送 /綁定ID 來註冊您的遊戲帳號，\n"
-            "讓盟主能更方便追蹤您的表現！\n\n"
-            "輸入 /幫助 查看更多指令"
-        )
-    else:
-        reply_text = f"❌ {message}"
+    if not success:
+        await _reply_text(reply_token, f"❌ {message}")
+        return
 
-    await _reply_text(reply_token, reply_text)
-
-
-async def _handle_bind_id_command(
-    line_group_id: str,
-    reply_token: str,
-    settings: Settings,
-) -> None:
-    """Handle /綁定ID command - send LIFF button"""
+    # Success: Send combined welcome message with LIFF button
     if not settings.liff_id:
-        await _reply_text(reply_token, "❌ LIFF 未設定")
+        await _reply_text(
+            reply_token,
+            "✅ 綁定成功！\n\n"
+            "盟友們請註冊您的遊戲 ID，\n"
+            "讓盟主能更方便追蹤您的表現！"
+        )
         return
 
     liff_url = create_liff_url(settings.liff_id, line_group_id)
-
-    # Try to send Flex Message, fallback to text
     line_bot = get_line_bot_api()
+
+    if line_bot:
+        try:
+            from linebot.v3.messaging import (
+                FlexBox,
+                FlexBubble,
+                FlexButton,
+                FlexMessage,
+                FlexSeparator,
+                FlexText,
+                ReplyMessageRequest,
+                URIAction,
+            )
+
+            bubble = FlexBubble(
+                body=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexText(
+                            text="✅ 綁定成功！",
+                            weight="bold",
+                            size="xl",
+                            color="#1DB446",
+                        ),
+                        FlexSeparator(margin="lg"),
+                        FlexText(
+                            text="各位盟友，請點擊下方按鈕",
+                            size="md",
+                            margin="lg",
+                        ),
+                        FlexText(
+                            text="註冊您的遊戲 ID，",
+                            size="md",
+                        ),
+                        FlexText(
+                            text="讓盟主能更方便追蹤您的表現！",
+                            size="md",
+                        ),
+                    ],
+                ),
+                footer=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexButton(
+                            action=URIAction(
+                                label="開始註冊",
+                                uri=liff_url,
+                            ),
+                            style="primary",
+                            color="#1DB446",
+                        ),
+                    ],
+                ),
+            )
+
+            flex_message = FlexMessage(
+                alt_text="✅ 綁定成功！請點擊註冊遊戲 ID",
+                contents=bubble,
+            )
+
+            line_bot.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[flex_message],
+                )
+            )
+            return
+        except Exception as e:
+            logger.error(f"Failed to send Flex Message: {e}")
+
+    # Fallback to text
+    await _reply_text(
+        reply_token,
+        f"✅ 綁定成功！\n\n"
+        f"各位盟友，請點擊以下連結註冊您的遊戲 ID：\n{liff_url}"
+    )
+
+
+async def _maybe_send_binding_reminder(
+    line_group_id: str,
+    line_user_id: str,
+    reply_token: str,
+    service: LineBindingService,
+    settings: Settings,
+) -> None:
+    """
+    Auto-send binding reminder if conditions are met:
+    1. Group is bound to alliance
+    2. User is NOT registered
+    3. Group hasn't received reminder in last 30 minutes
+    """
+    # Check if we should send reminder
+    should_send = await service.should_send_binding_reminder(
+        line_group_id=line_group_id,
+        line_user_id=line_user_id
+    )
+
+    if not should_send:
+        return
+
+    if not settings.liff_id:
+        return
+
+    # Update cooldown BEFORE sending to prevent race conditions
+    await service.update_group_reminder_cooldown(line_group_id)
+
+    liff_url = create_liff_url(settings.liff_id, line_group_id)
+    line_bot = get_line_bot_api()
+
     if line_bot:
         try:
             from linebot.v3.messaging import (
@@ -442,15 +545,20 @@ async def _handle_bind_id_command(
                     layout="vertical",
                     contents=[
                         FlexText(
-                            text="註冊遊戲 ID",
+                            text="📝 註冊遊戲 ID",
                             weight="bold",
                             size="lg",
                         ),
                         FlexText(
-                            text="點擊下方按鈕註冊您的遊戲帳號",
+                            text="尚未註冊的盟友，請點擊下方按鈕",
                             size="sm",
                             color="#666666",
                             margin="md",
+                        ),
+                        FlexText(
+                            text="完成遊戲 ID 綁定！",
+                            size="sm",
+                            color="#666666",
                         ),
                     ],
                 ),
@@ -469,7 +577,7 @@ async def _handle_bind_id_command(
             )
 
             flex_message = FlexMessage(
-                alt_text="註冊遊戲 ID",
+                alt_text="📝 請註冊遊戲 ID",
                 contents=bubble,
             )
 
@@ -481,12 +589,12 @@ async def _handle_bind_id_command(
             )
             return
         except Exception as e:
-            logger.error(f"Failed to send Flex Message: {e}")
+            logger.error(f"Failed to send auto-reminder Flex Message: {e}")
 
     # Fallback to text
     await _reply_text(
         reply_token,
-        f"📝 請點擊以下連結註冊您的遊戲 ID：\n{liff_url}"
+        f"📝 尚未註冊的盟友，請點擊以下連結完成遊戲 ID 綁定：\n{liff_url}"
     )
 
 
@@ -515,10 +623,10 @@ async def _handle_help_command(reply_token: str) -> None:
     """Handle /幫助 command"""
     reply_text = (
         "📖 指令說明\n\n"
-        "/綁定 <綁定碼> - 綁定同盟\n"
-        "/綁定ID - 註冊遊戲帳號\n"
+        "/綁定 <綁定碼> - 綁定同盟（盟主用）\n"
         "/狀態 - 查看綁定狀態\n"
-        "/幫助 - 顯示此說明"
+        "/幫助 - 顯示此說明\n\n"
+        "💡 盟友註冊遊戲 ID 會自動提醒"
     )
     await _reply_text(reply_token, reply_text)
 
