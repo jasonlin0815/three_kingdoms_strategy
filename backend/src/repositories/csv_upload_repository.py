@@ -7,10 +7,10 @@ CSV Upload Repository
 - Uses _execute_async() to avoid blocking event loop
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
-from src.models.csv_upload import CsvUpload
+from src.models.csv_upload import CsvUpload, UploadType
 from src.repositories.base import SupabaseRepository
 
 
@@ -21,12 +21,15 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
         """Initialize CSV upload repository"""
         super().__init__(table_name="csv_uploads", model_class=CsvUpload)
 
-    async def get_by_season(self, season_id: UUID) -> list[CsvUpload]:
+    async def get_by_season(
+        self, season_id: UUID, upload_type: UploadType = "regular"
+    ) -> list[CsvUpload]:
         """
-        Get CSV uploads by season ID
+        Get CSV uploads by season ID and upload type
 
         Args:
             season_id: Season UUID
+            upload_type: Type of upload to filter ('regular' or 'event')
 
         Returns:
             List of CSV upload instances
@@ -37,6 +40,7 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
             lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("season_id", str(season_id))
+            .eq("upload_type", upload_type)
             .order("snapshot_date", desc=True)
             .execute()
         )
@@ -149,24 +153,33 @@ class CsvUploadRepository(SupabaseRepository[CsvUpload]):
         self, alliance_id: UUID, season_id: UUID, snapshot_date: datetime
     ) -> CsvUpload | None:
         """
-        Get CSV upload by alliance, season, and snapshot date
+        Get regular CSV upload by alliance, season, and date (ignoring time).
+
+        Only checks 'regular' upload type. For data management, each day can have
+        at most one snapshot - uploading on the same day will replace the existing one.
 
         Args:
             alliance_id: Alliance UUID
             season_id: Season UUID
-            snapshot_date: Snapshot datetime
+            snapshot_date: Snapshot datetime (only date part is compared)
 
         Returns:
             CSV upload instance or None if not found
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
         """
+        # Compare only date part: start_of_day <= snapshot_date < end_of_day
+        start_of_day = snapshot_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+
         result = await self._execute_async(
             lambda: self.client.from_(self.table_name)
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("season_id", str(season_id))
-            .eq("snapshot_date", snapshot_date.isoformat())
+            .eq("upload_type", "regular")
+            .gte("snapshot_date", start_of_day.isoformat())
+            .lt("snapshot_date", end_of_day.isoformat())
             .limit(1)
             .execute()
         )

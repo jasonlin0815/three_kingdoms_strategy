@@ -121,3 +121,14 @@ export interface EventSnapshotInfo {
   readonly member_count: number
   readonly file_name: string
 }
+
+/**
+ * Response from event CSV upload endpoint
+ */
+export interface EventUploadResponse {
+  readonly upload_id: string
+  readonly season_id: string
+  readonly snapshot_date: string
+  readonly file_name: string
+  readonly total_members: number
+}

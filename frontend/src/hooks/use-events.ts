@@ -76,6 +76,28 @@ export function useCreateEvent(seasonId: string | undefined) {
 }
 
 /**
+ * Hook to upload CSV for event analysis
+ *
+ * Unlike regular uploads (useUploadCsv), this:
+ * - Does NOT trigger period calculation
+ * - Can have multiple uploads on the same day
+ * - Is stored with upload_type='event'
+ */
+export function useUploadEventCsv() {
+  return useMutation({
+    mutationFn: ({
+      seasonId,
+      file,
+      snapshotDate,
+    }: {
+      seasonId: string
+      file: File
+      snapshotDate?: string
+    }) => apiClient.uploadEventCsv(seasonId, file, snapshotDate),
+  })
+}
+
+/**
  * Hook to process event snapshots
  */
 export function useProcessEvent() {

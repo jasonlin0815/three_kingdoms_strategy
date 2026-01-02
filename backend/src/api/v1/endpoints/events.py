@@ -10,9 +10,10 @@ Follows CLAUDE.md:
 - Typed response models for OpenAPI docs
 """
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, Form, UploadFile
 
 from src.api.v1.schemas.events import (
     CreateEventRequest,
@@ -22,12 +23,72 @@ from src.api.v1.schemas.events import (
     EventListItemResponse,
     EventMemberMetricResponse,
     EventSummaryResponse,
+    EventUploadResponse,
     ProcessEventRequest,
 )
-from src.core.dependencies import BattleEventServiceDep, SeasonServiceDep, UserIdDep
+from src.core.dependencies import (
+    BattleEventServiceDep,
+    CSVUploadServiceDep,
+    SeasonServiceDep,
+    UserIdDep,
+)
 from src.models.battle_event import BattleEventCreate
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+@router.post("/upload-csv", response_model=EventUploadResponse)
+async def upload_event_csv(
+    user_id: UserIdDep,
+    csv_service: CSVUploadServiceDep,
+    season_service: SeasonServiceDep,
+    season_id: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    snapshot_date: Annotated[str | None, Form()] = None,
+) -> EventUploadResponse:
+    """
+    Upload CSV file for battle event analysis.
+
+    Unlike regular data management uploads, event CSV uploads:
+    - Do NOT trigger period calculation
+    - Can have multiple uploads on the same day
+    - Are stored separately from regular uploads
+
+    Args:
+        season_id: Season UUID (as string from form)
+        file: CSV file upload
+        snapshot_date: Optional custom snapshot datetime (ISO format)
+
+    Returns:
+        Upload result with upload_id and statistics
+    """
+    season_uuid = UUID(season_id)
+
+    # Verify user access to season
+    await season_service.verify_user_access(user_id, season_uuid)
+
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise ValueError("File must be a CSV file")
+
+    content = await file.read()
+    csv_content = content.decode("utf-8")
+
+    result = await csv_service.upload_csv(
+        user_id=user_id,
+        season_id=season_uuid,
+        filename=file.filename,
+        csv_content=csv_content,
+        custom_snapshot_date=snapshot_date,
+        upload_type="event",
+    )
+
+    return EventUploadResponse(
+        upload_id=str(result["upload_id"]),
+        season_id=str(result["season_id"]),
+        snapshot_date=result["snapshot_date"],
+        file_name=result["filename"],
+        total_members=result["total_members"],
+    )
 
 
 @router.get("", response_model=list[EventListItemResponse])

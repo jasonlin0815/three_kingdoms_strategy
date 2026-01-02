@@ -5,9 +5,15 @@ CSV Upload Pydantic models
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# Upload types:
+# - 'regular': Data management uploads (daily snapshots, triggers period calculation)
+# - 'event': Battle event analysis uploads (can have multiple per day, no period calculation)
+UploadType = Literal["regular", "event"]
 
 
 class CsvUploadBase(BaseModel):
@@ -18,6 +24,10 @@ class CsvUploadBase(BaseModel):
     )
     file_name: str = Field(..., min_length=1, max_length=255, description="Original filename")
     total_members: int = Field(0, ge=0, description="Total member count in this upload")
+    upload_type: UploadType = Field(
+        default="regular",
+        description="Type of upload: 'regular' for data management, 'event' for battle events"
+    )
 
 
 class CsvUploadCreate(CsvUploadBase):

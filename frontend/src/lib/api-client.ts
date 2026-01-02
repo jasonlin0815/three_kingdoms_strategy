@@ -41,6 +41,7 @@ import type {
   EventListItem,
   EventAnalyticsResponse,
   CreateEventRequest,
+  EventUploadResponse,
 } from '@/types/event'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8087'
@@ -583,6 +584,35 @@ class ApiClient {
     const response = await this.client.post<BattleEvent>('/api/v1/events', data, {
       params: { season_id: seasonId }
     })
+    return response.data
+  }
+
+  /**
+   * Upload CSV for event analysis (separate from regular data management uploads)
+   *
+   * Unlike regular uploads, event CSV uploads:
+   * - Do NOT trigger period calculation
+   * - Can have multiple uploads on the same day
+   * - Are stored with upload_type='event'
+   */
+  async uploadEventCsv(
+    seasonId: string,
+    file: File,
+    snapshotDate?: string
+  ): Promise<EventUploadResponse> {
+    const formData = new FormData()
+    formData.append('season_id', seasonId)
+    formData.append('file', file)
+    if (snapshotDate) {
+      formData.append('snapshot_date', snapshotDate)
+    }
+
+    // Note: Don't set Content-Type header manually - axios handles it automatically
+    // for FormData and adds the required boundary parameter
+    const response = await this.client.post<EventUploadResponse>(
+      '/api/v1/events/upload-csv',
+      formData
+    )
     return response.data
   }
 

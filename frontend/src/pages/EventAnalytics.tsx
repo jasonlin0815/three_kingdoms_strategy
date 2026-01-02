@@ -19,8 +19,7 @@ import { Label } from '@/components/ui/label'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RoleGuard } from '@/components/alliance/RoleGuard'
 import { useSeasons } from '@/hooks/use-seasons'
-import { useEvents, useEventAnalytics, useCreateEvent, useProcessEvent } from '@/hooks/use-events'
-import { useUploadCsv } from '@/hooks/use-csv-uploads'
+import { useEvents, useEventAnalytics, useCreateEvent, useProcessEvent, useUploadEventCsv } from '@/hooks/use-events'
 import {
   Plus,
   Swords,
@@ -224,7 +223,7 @@ function EventAnalytics() {
   const { data: events, isLoading: eventsLoading } = useEvents(activeSeason?.id)
 
   // Mutations
-  const uploadCsv = useUploadCsv()
+  const uploadEventCsv = useUploadEventCsv()
   const createEvent = useCreateEvent(activeSeason?.id)
   const processEvent = useProcessEvent()
 
@@ -277,14 +276,14 @@ function EventAnalytics() {
     setError(null)
 
     try {
-      // 1. Upload before CSV
-      const beforeUpload = await uploadCsv.mutateAsync({
+      // 1. Upload before CSV (uses event-specific endpoint, no period calculation)
+      const beforeUpload = await uploadEventCsv.mutateAsync({
         seasonId: activeSeason.id,
         file: formData.beforeFile,
       })
 
-      // 2. Upload after CSV
-      const afterUpload = await uploadCsv.mutateAsync({
+      // 2. Upload after CSV (uses event-specific endpoint, no period calculation)
+      const afterUpload = await uploadEventCsv.mutateAsync({
         seasonId: activeSeason.id,
         file: formData.afterFile,
       })
@@ -310,7 +309,7 @@ function EventAnalytics() {
     } finally {
       setIsProcessing(false)
     }
-  }, [activeSeason?.id, formData, uploadCsv, createEvent, processEvent, handleCancelCreate])
+  }, [activeSeason?.id, formData, uploadEventCsv, createEvent, processEvent, handleCancelCreate])
 
   return (
     <AllianceGuard>

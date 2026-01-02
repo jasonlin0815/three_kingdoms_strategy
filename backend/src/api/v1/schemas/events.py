@@ -41,6 +41,16 @@ class ProcessEventRequest(BaseModel):
 # ============================================================================
 
 
+class EventUploadResponse(BaseModel):
+    """Response for event CSV upload"""
+
+    upload_id: str = Field(..., description="Created upload UUID")
+    season_id: str = Field(..., description="Season UUID")
+    snapshot_date: str = Field(..., description="Snapshot datetime (ISO format)")
+    file_name: str = Field(..., description="Original filename")
+    total_members: int = Field(..., description="Total members in this upload")
+
+
 class EventListItemResponse(BaseModel):
     """Event list item for event cards"""
 

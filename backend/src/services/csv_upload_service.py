@@ -12,6 +12,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
+from src.models.csv_upload import UploadType
 from src.repositories.alliance_collaborator_repository import (
     AllianceCollaboratorRepository,
 )
@@ -47,6 +48,7 @@ class CSVUploadService:
         filename: str,
         csv_content: str,
         custom_snapshot_date: str | None = None,
+        upload_type: UploadType = "regular",
     ) -> dict:
         """
         Complete CSV upload workflow
@@ -59,6 +61,9 @@ class CSVUploadService:
             filename: CSV filename
             csv_content: CSV file content as string
             custom_snapshot_date: Optional custom snapshot datetime (ISO format string)
+            upload_type: Type of upload - 'regular' for data management (triggers period
+                        calculation, replaces same-day uploads) or 'event' for battle
+                        event analysis (no period calculation, multiple per day allowed)
 
         Returns:
             Upload result with statistics
@@ -71,11 +76,11 @@ class CSVUploadService:
             1. Validate user owns the season
             2. Extract snapshot date from filename or custom date
             3. Parse CSV content
-            4. Check for existing upload on same date (delete if exists)
+            4. For 'regular' uploads: Check for existing upload on same date (delete if exists)
             5. Create CSV upload record
             6. Upsert members
             7. Batch create snapshots
-            8. Update member activity
+            8. For 'regular' uploads: Calculate period metrics
 
         符合 CLAUDE.md 🔴: Service layer orchestration
         """
@@ -119,14 +124,16 @@ class CSVUploadService:
         if not members_data:
             raise HTTPException(status_code=400, detail="CSV file is empty")
 
-        # Step 4: Check for existing upload on same date
-        existing_upload = await self._csv_upload_repo.get_by_date(
-            alliance_id=alliance.id, season_id=season_id, snapshot_date=snapshot_date
-        )
+        # Step 4: For 'regular' uploads only - check for existing upload on same date
+        existing_upload = None
+        if upload_type == "regular":
+            existing_upload = await self._csv_upload_repo.get_by_date(
+                alliance_id=alliance.id, season_id=season_id, snapshot_date=snapshot_date
+            )
 
-        if existing_upload:
-            # Delete existing upload (CASCADE will delete snapshots automatically)
-            await self._csv_upload_repo.delete(existing_upload.id)
+            if existing_upload:
+                # Delete existing upload (CASCADE will delete snapshots automatically)
+                await self._csv_upload_repo.delete(existing_upload.id)
 
         # Step 5: Create CSV upload record
         upload_data = {
@@ -135,6 +142,7 @@ class CSVUploadService:
             "snapshot_date": snapshot_date.isoformat(),
             "file_name": filename,
             "total_members": len(members_data),
+            "upload_type": upload_type,
         }
 
         csv_upload = await self._csv_upload_repo.create(upload_data)
@@ -183,8 +191,11 @@ class CSVUploadService:
 
         snapshots = await self._snapshot_repo.create_batch(snapshots_data)
 
-        # Step 8: Calculate period metrics (handles first upload and middle insert)
-        periods = await self._period_metrics_service.calculate_periods_for_season(season_id)
+        # Step 8: For 'regular' uploads only - calculate period metrics
+        total_periods = 0
+        if upload_type == "regular":
+            periods = await self._period_metrics_service.calculate_periods_for_season(season_id)
+            total_periods = len(periods)
 
         # Step 9: Return result
         return {
@@ -195,8 +206,9 @@ class CSVUploadService:
             "filename": filename,
             "total_members": len(members_data),
             "total_snapshots": len(snapshots),
-            "total_periods": len(periods),
+            "total_periods": total_periods,
             "replaced_existing": existing_upload is not None,
+            "upload_type": upload_type,
         }
 
     async def get_uploads_by_season(self, user_id: UUID, season_id: UUID) -> list[dict]:
