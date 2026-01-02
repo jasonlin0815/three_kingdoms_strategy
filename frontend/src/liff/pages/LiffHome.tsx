@@ -1,9 +1,8 @@
 /**
  * LIFF Home Page
  *
- * Main LIFF page with tabs for:
- * - Roster: Game ID registration
- * - Copper: Copper mine management
+ * Compact LIFF page for Tall mode (bottom sheet).
+ * Tabs: Game ID registration, Copper mine management.
  */
 
 import { useState } from 'react'
@@ -17,27 +16,33 @@ export function LiffHome() {
   const [activeTab, setActiveTab] = useState('roster')
 
   return (
-    <div className="p-4 max-w-lg mx-auto">
-      <div className="mb-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          {session.lineDisplayName}
-        </p>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+      {/* Sticky header with tabs */}
+      <div className="sticky top-0 z-10 bg-background border-b px-3 pt-3 pb-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+            {session.lineDisplayName}
+          </span>
+        </div>
+        <TabsList className="grid w-full grid-cols-2 h-9">
+          <TabsTrigger value="roster" className="text-sm">
+            遊戲 ID
+          </TabsTrigger>
+          <TabsTrigger value="copper" className="text-sm">
+            銅礦管理
+          </TabsTrigger>
+        </TabsList>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="roster">遊戲 ID</TabsTrigger>
-          <TabsTrigger value="copper">銅礦管理</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="roster">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-auto">
+        <TabsContent value="roster" className="m-0">
           <RosterTab session={session} />
         </TabsContent>
-
-        <TabsContent value="copper">
+        <TabsContent value="copper" className="m-0">
           <CopperTab session={session} />
         </TabsContent>
-      </Tabs>
-    </div>
+      </div>
+    </Tabs>
   )
 }

@@ -1,14 +1,13 @@
 /**
  * Copper Tab
  *
- * Copper mine registration and management for LIFF users.
+ * Compact copper mine registration for LIFF Tall mode.
  */
 
 import { useState } from 'react'
-import { MapPin, Trash2 } from 'lucide-react'
+import { Plus, MapPin, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -16,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import {
   useLiffCopperMines,
   useLiffRegisterCopper,
@@ -26,14 +24,6 @@ import type { LiffSession } from '../hooks/use-liff-session'
 
 interface Props {
   readonly session: LiffSession
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
 }
 
 function parseCoordinate(coord: string): { x: number; y: number } | null {
@@ -46,6 +36,7 @@ export function CopperTab({ session }: Props) {
   const [gameId, setGameId] = useState('')
   const [coordinate, setCoordinate] = useState('')
   const [level, setLevel] = useState('9')
+  const [formError, setFormError] = useState('')
 
   const context = {
     lineUserId: session.lineUserId,
@@ -61,10 +52,11 @@ export function CopperTab({ session }: Props) {
 
     const parsed = parseCoordinate(coordinate)
     if (!parsed) {
-      alert('座標格式錯誤，請輸入如: 123,456')
+      setFormError('座標格式錯誤')
       return
     }
 
+    setFormError('')
     try {
       await registerMutation.mutateAsync({
         gameId: gameId.trim(),
@@ -80,20 +72,22 @@ export function CopperTab({ session }: Props) {
   }
 
   const handleDelete = async (mineId: string) => {
-    if (!confirm('確定要刪除此銅礦記錄？')) return
+    if (!confirm('確定刪除？')) return
     await deleteMutation.mutateAsync({ mineId })
   }
 
   if (isLoading) {
     return (
-      <div className="py-8 text-center text-muted-foreground">載入中...</div>
+      <div className="py-6 text-center">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto" />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <div className="py-8 text-center text-destructive">
-        載入失敗: {error.message}
+      <div className="p-3 text-center text-sm text-destructive">
+        {error.message}
       </div>
     )
   }
@@ -101,106 +95,99 @@ export function CopperTab({ session }: Props) {
   const mines = data?.mines || []
 
   return (
-    <div className="space-y-4 mt-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">註冊銅礦</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+    <div className="p-3 space-y-3">
+      {/* Compact form */}
+      <div className="space-y-2">
+        <div className="flex gap-2">
           <Input
             value={gameId}
             onChange={(e) => setGameId(e.target.value)}
             placeholder="遊戲 ID"
+            className="h-10 flex-1"
           />
-          <div className="flex gap-2">
-            <Input
-              value={coordinate}
-              onChange={(e) => setCoordinate(e.target.value)}
-              placeholder="座標 (例: 123,456)"
-              className="flex-1"
-            />
-            <Select value={level} onValueChange={setLevel}>
-              <SelectTrigger className="w-24">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[...Array(10)].map((_, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>
-                    {i + 1} 級
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            請確保遊戲 ID 與遊戲內顯示完全相同
-          </p>
+          <Select value={level} onValueChange={setLevel}>
+            <SelectTrigger className="h-10 w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[...Array(10)].map((_, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {i + 1} 級
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={coordinate}
+            onChange={(e) => setCoordinate(e.target.value)}
+            placeholder="座標 123,456"
+            className="h-10 flex-1"
+            inputMode="numeric"
+            onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+          />
           <Button
             onClick={handleRegister}
-            disabled={
-              !gameId.trim() ||
-              !coordinate.trim() ||
-              registerMutation.isPending
-            }
-            className="w-full"
+            disabled={!gameId.trim() || !coordinate.trim() || registerMutation.isPending}
+            size="icon"
+            className="h-10 w-10 shrink-0"
           >
-            <MapPin className="h-4 w-4 mr-2" />
-            註冊銅礦
+            {registerMutation.isPending ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
           </Button>
-          {registerMutation.error && (
-            <p className="text-sm text-destructive">
-              {registerMutation.error.message}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            已註冊銅礦 ({mines.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {mines.length === 0 ? (
-            <p className="text-sm text-muted-foreground">尚未註冊任何銅礦</p>
-          ) : (
-            <div className="space-y-3">
-              {mines.map((mine) => (
-                <div
-                  key={mine.id}
-                  className="flex items-start justify-between py-2 border-b last:border-0"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        Lv.{mine.level} 銅礦
-                      </span>
-                      <Badge variant="outline">
-                        ({mine.coord_x}, {mine.coord_y})
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {mine.game_id}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(mine.registered_at)}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(mine.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+      {(formError || registerMutation.error) && (
+        <p className="text-xs text-destructive">
+          {formError || registerMutation.error?.message}
+        </p>
+      )}
+
+      {/* Mines list */}
+      <div className="pt-2">
+        <div className="text-xs text-muted-foreground mb-2">
+          已註冊 ({mines.length})
+        </div>
+        {mines.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            尚未註冊銅礦
+          </p>
+        ) : (
+          <div className="space-y-1">
+            {mines.map((mine) => (
+              <div
+                key={mine.id}
+                className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="text-sm font-medium">Lv.{mine.level}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({mine.coord_x},{mine.coord_y})
+                  </span>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {mine.game_id}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => handleDelete(mine.id)}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
