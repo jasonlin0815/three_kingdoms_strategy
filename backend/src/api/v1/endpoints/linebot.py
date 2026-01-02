@@ -35,6 +35,7 @@ from src.models.copper_mine import (
 from src.models.line_binding import (
     LineBindingCodeResponse,
     LineBindingStatusResponse,
+    LineWebhookEvent,
     LineWebhookRequest,
     MemberInfoResponse,
     MemberLineBindingCreate,
@@ -331,23 +332,21 @@ async def handle_webhook(
 
 
 async def _handle_event(
-    event: dict,
+    event: LineWebhookEvent,
     service: LineBindingService,
     settings: Settings,
 ) -> None:
     """Handle a single LINE event"""
-    event_type = event.get("type")
-
-    if event_type != "message":
+    if event.type != "message":
         return
 
-    message = event.get("message", {})
+    message = event.message or {}
     if message.get("type") != "text":
         return
 
     text = message.get("text", "").strip()
-    source = event.get("source", {})
-    reply_token = event.get("replyToken")
+    source = event.source
+    reply_token = event.reply_token
 
     # Only handle group messages
     if source.get("type") != "group":
