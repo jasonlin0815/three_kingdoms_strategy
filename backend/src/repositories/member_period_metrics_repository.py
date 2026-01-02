@@ -85,10 +85,16 @@ class MemberPeriodMetricsRepository(SupabaseRepository[MemberPeriodMetrics]):
             List of member period metrics ordered by period
 
         符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
+
+        Note: Uses !inner join to ensure season_id filter works correctly.
+        Without !inner, PostgREST only filters the JOIN result, not the main table,
+        causing metrics from other seasons to be included.
         """
+        # Use !inner to enforce inner join - ensures season_id filter
+        # excludes metrics from other seasons (not just nullifies the join)
         query = (
             self.client.from_(self.table_name)
-            .select("*, periods(period_number, start_date, end_date)")
+            .select("*, periods!inner(period_number, start_date, end_date, season_id)")
             .eq("member_id", str(member_id))
         )
 
