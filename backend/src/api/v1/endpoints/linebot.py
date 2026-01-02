@@ -81,7 +81,9 @@ async def generate_binding_code(
         )
 
     # Check permission (owner or collaborator)
-    await permission_service.require_update_permission(user_id, alliance.id)
+    await permission_service.require_owner_or_collaborator(
+        user_id, alliance.id, "generate LINE binding code"
+    )
 
     return await service.generate_binding_code(
         alliance_id=alliance.id,
@@ -147,7 +149,9 @@ async def unbind_line_group(
         )
 
     # Check permission
-    await permission_service.require_update_permission(user_id, alliance.id)
+    await permission_service.require_owner_or_collaborator(
+        user_id, alliance.id, "unbind LINE group"
+    )
 
     await service.unbind_group(alliance.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
