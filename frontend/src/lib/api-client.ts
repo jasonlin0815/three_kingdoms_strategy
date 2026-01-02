@@ -283,10 +283,11 @@ class ApiClient {
       formData.append('snapshot_date', snapshotDate)
     }
 
+    // IMPORTANT: Must set Content-Type to undefined to let axios automatically
+    // set multipart/form-data with correct boundary parameter.
+    // Manually setting 'multipart/form-data' without boundary breaks parsing.
     const response = await this.client.post<CsvUploadResponse>('/api/v1/uploads', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+      headers: { 'Content-Type': undefined }
     })
     return response.data
   }
@@ -607,11 +608,13 @@ class ApiClient {
       formData.append('snapshot_date', snapshotDate)
     }
 
-    // Note: Don't set Content-Type header manually - axios handles it automatically
-    // for FormData and adds the required boundary parameter
+    // IMPORTANT: Must explicitly set Content-Type to undefined to let axios
+    // automatically set multipart/form-data with correct boundary.
+    // The default 'application/json' from client config would break FormData.
     const response = await this.client.post<EventUploadResponse>(
       '/api/v1/events/upload-csv',
-      formData
+      formData,
+      { headers: { 'Content-Type': undefined } }
     )
     return response.data
   }

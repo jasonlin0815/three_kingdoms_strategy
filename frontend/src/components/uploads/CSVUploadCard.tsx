@@ -6,9 +6,14 @@
  * - Type-safe component
  * - Date range validation against season dates
  * - Drag & Drop upload zone at top
+ *
+ * Best Practice (2025):
+ * - Use <label htmlFor> instead of programmatic input.click()
+ * - Chrome has strict "user gesture" requirements that can block input.click()
+ * - Native label association is the most reliable cross-browser solution
  */
 
-import React, { useCallback, useState, useRef } from 'react'
+import React, { useCallback, useState, useId } from 'react'
 import { Upload, FileText, Trash2, AlertCircle, CheckCircle2, FileUp, RefreshCw, Loader2 } from 'lucide-react'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { Button } from '@/components/ui/button'
@@ -43,7 +48,7 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false)
   const [uploadToDelete, setUploadToDelete] = useState<CsvUpload | null>(null)
   const [showRecalculateSuccess, setShowRecalculateSuccess] = useState<boolean>(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputId = useId()
   const canUploadData = useCanUploadData()
   const recalculateMutation = useRecalculateSeasonPeriods(season.id)
 
@@ -134,6 +139,8 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
     if (file) {
       processFile(file)
     }
+    // Reset input so same file can be selected again
+    e.target.value = ''
   }, [processFile])
 
   /**
@@ -152,34 +159,29 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
     setDateError(null)
     setParsedDate(null)
     setSnapshotDate('')
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
   }, [selectedFile, snapshotDate, onUpload])
 
   /**
-   * Handle drag events
+   * Handle drag events for the label element
    */
-  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(true)
   }, [])
 
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
   }, [])
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     e.stopPropagation()
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = useCallback((e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
@@ -189,13 +191,6 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
       processFile(file)
     }
   }, [processFile])
-
-  /**
-   * Handle click to upload
-   */
-  const handleClickUpload = useCallback(() => {
-    fileInputRef.current?.click()
-  }, [])
 
   /**
    * Open delete confirmation dialog
@@ -250,25 +245,19 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
         {/* Drag & Drop Upload Zone - Only for owners/collaborators */}
         {canUploadData && (
           <div className="space-y-4">
-
-            {/* Hidden File Input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            {/* Drag & Drop Zone */}
-            <div
-              onClick={handleClickUpload}
+            {/*
+              Using <label> with htmlFor provides native file dialog triggering.
+              This bypasses Chrome's strict "user gesture" requirements that can
+              block programmatic input.click() calls.
+            */}
+            <label
+              htmlFor={fileInputId}
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               className={`
-                relative flex flex-col items-center justify-center
+                flex flex-col items-center justify-center
                 px-6 py-8 rounded-lg border-2 border-dashed
                 transition-all duration-200 cursor-pointer
                 ${isDragging
@@ -278,6 +267,15 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
                 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
               `}
             >
+              {/* Hidden File Input */}
+              <input
+                id={fileInputId}
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                className="sr-only"
+              />
+
               <FileUp className={`h-10 w-10 mb-3 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
               <p className="text-sm font-medium mb-1">
                 {isDragging ? '放開以上傳檔案' : '點擊上傳或拖放 CSV 檔案'}
@@ -285,7 +283,7 @@ export const CSVUploadCard: React.FC<CSVUploadCardProps> = ({
               <p className="text-xs text-muted-foreground text-center">
                 檔名格式：同盟統計YYYY年MM月DD日HH时MM分SS秒.csv
               </p>
-            </div>
+            </label>
 
             {/* Date Error */}
             {dateError && (
