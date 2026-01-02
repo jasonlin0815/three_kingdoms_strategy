@@ -6,6 +6,7 @@ Battle Event Repository
 - Uses _handle_supabase_result() for all queries
 """
 
+from datetime import datetime
 from uuid import UUID
 
 from src.models.battle_event import BattleEvent, BattleEventCreate, EventStatus
@@ -130,6 +131,46 @@ class BattleEventRepository(SupabaseRepository[BattleEvent]):
             update_data["before_upload_id"] = str(before_upload_id)
         if after_upload_id is not None:
             update_data["after_upload_id"] = str(after_upload_id)
+
+        if not update_data:
+            event = await self.get_by_id(event_id)
+            if not event:
+                raise ValueError(f"Event {event_id} not found")
+            return event
+
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
+            .update(update_data)
+            .eq("id", str(event_id))
+            .execute()
+        )
+        data = self._handle_supabase_result(result, expect_single=True)
+        return self._build_model(data)
+
+    async def update_event_times(
+        self,
+        event_id: UUID,
+        event_start: datetime | None = None,
+        event_end: datetime | None = None,
+    ) -> BattleEvent:
+        """
+        Update event start and end times
+
+        Args:
+            event_id: Event UUID
+            event_start: Event start timestamp (from before snapshot)
+            event_end: Event end timestamp (from after snapshot)
+
+        Returns:
+            Updated battle event instance
+
+        符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
+        """
+        update_data: dict = {}
+        if event_start is not None:
+            update_data["event_start"] = event_start.isoformat()
+        if event_end is not None:
+            update_data["event_end"] = event_end.isoformat()
 
         if not update_data:
             event = await self.get_by_id(event_id)

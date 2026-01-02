@@ -6,6 +6,7 @@
  */
 
 import { useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +35,6 @@ interface EventCardProps {
     metrics: readonly EventMemberMetric[]
     merit_distribution: readonly DistributionBin[]
   } | null
-  readonly onViewDetail: (eventId: string) => void
 }
 
 // ============================================================================
@@ -77,10 +77,10 @@ interface ExpandedContentProps {
     summary: EventSummary
     merit_distribution: readonly DistributionBin[]
   }
-  readonly onViewDetail: (eventId: string) => void
 }
 
-function ExpandedContent({ eventId, eventDetail, onViewDetail }: ExpandedContentProps) {
+function ExpandedContent({ eventId, eventDetail }: ExpandedContentProps) {
+  const navigate = useNavigate()
   const { summary, merit_distribution } = eventDetail
 
   return (
@@ -160,7 +160,7 @@ function ExpandedContent({ eventId, eventDetail, onViewDetail }: ExpandedContent
           size="sm"
           onClick={(e) => {
             e.stopPropagation()
-            onViewDetail(eventId)
+            navigate(`/events/${eventId}`)
           }}
         >
           查看完整分析
@@ -175,13 +175,14 @@ function ExpandedContent({ eventId, eventDetail, onViewDetail }: ExpandedContent
 // Main Component
 // ============================================================================
 
-export function EventCard({ event, eventDetail, onViewDetail }: EventCardProps) {
+export function EventCard({ event, eventDetail }: EventCardProps) {
+  const navigate = useNavigate()
   const Icon = getEventIcon()
   const eventTypeLabel = getEventTypeLabel(event.event_type)
 
   const handleViewDetail = useCallback(() => {
-    onViewDetail(event.id)
-  }, [event.id, onViewDetail])
+    navigate(`/events/${event.id}`)
+  }, [event.id, navigate])
 
   // Build inline description with key metrics
   const inlineStats = [
@@ -231,7 +232,6 @@ export function EventCard({ event, eventDetail, onViewDetail }: EventCardProps) 
             summary: eventDetail.summary,
             merit_distribution: eventDetail.merit_distribution,
           }}
-          onViewDetail={onViewDetail}
         />
       ) : (
         <div className="py-8 text-center text-muted-foreground">

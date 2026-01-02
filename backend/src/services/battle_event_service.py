@@ -29,6 +29,7 @@ from src.models.battle_event_metrics import (
 )
 from src.repositories.battle_event_metrics_repository import BattleEventMetricsRepository
 from src.repositories.battle_event_repository import BattleEventRepository
+from src.repositories.csv_upload_repository import CsvUploadRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.services.permission_service import PermissionService
 
@@ -41,6 +42,7 @@ class BattleEventService:
         self._event_repo = BattleEventRepository()
         self._metrics_repo = BattleEventMetricsRepository()
         self._snapshot_repo = MemberSnapshotRepository()
+        self._upload_repo = CsvUploadRepository()
         self._permission_service = PermissionService()
 
     async def verify_user_access(self, user_id: UUID, event_id: UUID) -> UUID:
@@ -172,6 +174,17 @@ class BattleEventService:
             event_id, before_upload_id, after_upload_id
         )
         await self._event_repo.update_status(event_id, EventStatus.ANALYZING)
+
+        # 1.5 Auto-set event times from CSV upload snapshot dates
+        before_upload = await self._upload_repo.get_by_id(before_upload_id)
+        after_upload = await self._upload_repo.get_by_id(after_upload_id)
+
+        if before_upload and after_upload:
+            await self._event_repo.update_event_times(
+                event_id,
+                event_start=before_upload.snapshot_date,
+                event_end=after_upload.snapshot_date,
+            )
 
         # 2. Get snapshots for both uploads
         before_snapshots = await self._snapshot_repo.get_by_upload(before_upload_id)
