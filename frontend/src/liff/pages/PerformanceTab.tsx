@@ -11,6 +11,7 @@ import {
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
+  PolarRadiusAxis,
   Radar,
   LineChart,
   Line,
@@ -123,15 +124,16 @@ export function PerformanceTab({ session }: Props) {
   const radarData = useMemo(() => {
     if (!performance?.latest || !performance?.alliance_avg) return []
 
+    // Dimension order matches MemberPerformance.tsx: 貢獻→戰功→勢力值→助攻→捐獻
     const metrics: Array<{
       key: keyof PerformanceMetrics
       label: string
     }> = [
       { key: 'daily_contribution', label: '貢獻' },
       { key: 'daily_merit', label: '戰功' },
+      { key: 'power', label: '勢力值' },
       { key: 'daily_assist', label: '助攻' },
       { key: 'daily_donation', label: '捐獻' },
-      { key: 'power', label: '勢力' },
     ]
 
     return metrics.map(({ key, label }) => {
@@ -304,36 +306,46 @@ export function PerformanceTab({ session }: Props) {
             <div className="text-xs text-muted-foreground mb-2 text-center">
               五維能力 (vs 同盟平均)
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={220}>
               <RadarChart data={radarData}>
-                <PolarGrid stroke="#e5e7eb" />
+                <PolarGrid stroke="#e5e7eb" gridType="polygon" />
                 <PolarAngleAxis
                   dataKey="metric"
                   tick={{ fontSize: 11, fill: '#6b7280' }}
+                />
+                <PolarRadiusAxis
+                  angle={90}
+                  domain={[0, Math.max(150, ...radarData.map((d) => Math.max(d.me, d.median)))]}
+                  tick={{ fontSize: 9, fill: '#9ca3af' }}
+                  tickFormatter={(value) => `${value}%`}
+                  tickCount={4}
+                />
+                {/* Render order: back to front for proper layering */}
+                <Radar
+                  name="盟均"
+                  dataKey="avg"
+                  stroke="#9ca3af"
+                  fill="#9ca3af"
+                  fillOpacity={0.1}
+                  strokeDasharray="4 4"
+                  strokeWidth={1}
+                />
+                <Radar
+                  name="中位數"
+                  dataKey="median"
+                  stroke="#8b9cb3"
+                  fill="#8b9cb3"
+                  fillOpacity={0.08}
+                  strokeDasharray="2 2"
+                  strokeWidth={1}
                 />
                 <Radar
                   name="我"
                   dataKey="me"
                   stroke="#2563eb"
                   fill="#2563eb"
-                  fillOpacity={0.3}
+                  fillOpacity={0.4}
                   strokeWidth={2}
-                />
-                <Radar
-                  name="盟均"
-                  dataKey="avg"
-                  stroke="#9ca3af"
-                  fill="transparent"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                />
-                <Radar
-                  name="中位數"
-                  dataKey="median"
-                  stroke="#f59e0b"
-                  fill="transparent"
-                  strokeDasharray="2 2"
-                  strokeWidth={1}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -342,10 +354,10 @@ export function PerformanceTab({ session }: Props) {
                 <span className="w-3 h-0.5 bg-primary inline-block" /> 我
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-0.5 bg-gray-400 inline-block" style={{ borderStyle: 'dashed' }} /> 盟均
+                <span className="w-3 h-0.5 bg-gray-400 inline-block opacity-70" /> 盟均
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-0.5 bg-amber-500 inline-block" /> 中位數
+                <span className="w-3 h-0.5 inline-block" style={{ backgroundColor: '#8b9cb3' }} /> 中位數
               </span>
             </div>
           </CardContent>
@@ -395,19 +407,21 @@ export function PerformanceTab({ session }: Props) {
                 />
                 <Line
                   yAxisId="left"
-                  type="monotone"
+                  type="stepAfter"
                   dataKey="貢獻"
                   stroke="#2563eb"
                   strokeWidth={2}
-                  dot={{ r: 3 }}
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
                 <Line
                   yAxisId="right"
-                  type="monotone"
+                  type="stepAfter"
                   dataKey="戰功"
                   stroke="#10b981"
                   strokeWidth={2}
-                  dot={{ r: 3 }}
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
               </LineChart>
             </ResponsiveContainer>
