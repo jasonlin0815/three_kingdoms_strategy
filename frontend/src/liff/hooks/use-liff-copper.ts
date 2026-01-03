@@ -101,6 +101,8 @@ export function useLiffRegisterCopper(context: LiffContext | null) {
       queryClient.setQueryData<CopperMineListResponse>(queryKey, (old) => ({
         mines: [optimisticMine, ...(old?.mines || [])],
         total: (old?.total || 0) + 1,
+        my_count: (old?.my_count || 0) + 1,
+        max_allowed: old?.max_allowed || 0,
       }))
 
       return { previousData }
@@ -158,6 +160,8 @@ export function useLiffDeleteCopper(context: LiffContext | null) {
       queryClient.setQueryData<CopperMineListResponse>(queryKey, (old) => ({
         mines: old?.mines.filter((m) => m.id !== mineId) || [],
         total: Math.max((old?.total || 0) - 1, 0),
+        my_count: Math.max((old?.my_count || 0) - 1, 0),
+        max_allowed: old?.max_allowed || 0,
       }))
 
       return { previousData }

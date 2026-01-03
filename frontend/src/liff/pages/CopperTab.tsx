@@ -118,6 +118,9 @@ export function CopperTab({ session }: Props) {
   }
 
   const mines = data?.mines || []
+  const myCount = data?.my_count ?? 0
+  const maxAllowed = data?.max_allowed ?? 0
+  const canApply = maxAllowed === 0 || myCount < maxAllowed
 
   // 判斷銅礦是否為自己註冊的（根據 game_id 匹配用戶的帳號列表）
   const myGameIds = new Set(accounts.map((acc) => acc.game_id))
@@ -135,6 +138,20 @@ export function CopperTab({ session }: Props) {
 
   return (
     <div className="p-3 space-y-3">
+      {/* Quota status */}
+      {maxAllowed > 0 && (
+        <div className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg ${
+          canApply ? 'bg-muted/50' : 'bg-destructive/10'
+        }`}>
+          <span className={canApply ? 'text-muted-foreground' : 'text-destructive'}>
+            已申請 {myCount} / {maxAllowed} 座
+          </span>
+          {!canApply && (
+            <span className="text-destructive font-medium">已達上限</span>
+          )}
+        </div>
+      )}
+
       {/* Compact form */}
       <div className="space-y-2">
         <div className="flex gap-2">
@@ -147,6 +164,7 @@ export function CopperTab({ session }: Props) {
             <Select
               value={effectiveGameId || ''}
               onValueChange={setSelectedGameId}
+              disabled={!canApply}
             >
               <SelectTrigger className="h-10 flex-1">
                 <SelectValue placeholder="選擇帳號" />
@@ -160,7 +178,7 @@ export function CopperTab({ session }: Props) {
               </SelectContent>
             </Select>
           )}
-          <Select value={level} onValueChange={setLevel}>
+          <Select value={level} onValueChange={setLevel} disabled={!canApply}>
             <SelectTrigger className="h-10 w-20">
               <SelectValue />
             </SelectTrigger>
@@ -180,6 +198,7 @@ export function CopperTab({ session }: Props) {
               className="h-10"
               inputMode="numeric"
               pattern="[0-9]*"
+              disabled={!canApply}
             />
           </div>
           <div className="flex items-center gap-1.5 flex-1">
@@ -191,12 +210,13 @@ export function CopperTab({ session }: Props) {
               className="h-10"
               inputMode="numeric"
               pattern="[0-9]*"
-              onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+              disabled={!canApply}
+              onKeyDown={(e) => e.key === 'Enter' && canApply && handleRegister()}
             />
           </div>
           <Button
             onClick={handleRegister}
-            disabled={!effectiveGameId || !coordX.trim() || !coordY.trim() || registerMutation.isPending}
+            disabled={!canApply || !effectiveGameId || !coordX.trim() || !coordY.trim() || registerMutation.isPending}
             size="icon"
             className="h-10 w-10 shrink-0"
           >

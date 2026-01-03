@@ -127,6 +127,8 @@ export interface CopperMine {
 export interface CopperMineListResponse {
   mines: CopperMine[]
   total: number
+  my_count: number
+  max_allowed: number
 }
 
 export interface RegisterCopperResponse {

@@ -32,6 +32,13 @@ from src.repositories.member_repository import MemberRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.repositories.season_repository import SeasonRepository
 
+# 等級文字對照表（避免重複定義）
+LEVEL_TEXT = {
+    "nine": "9 級",
+    "ten": "10 級",
+    "both": "9 或 10 級"
+}
+
 
 class CopperMineService:
     """Service for copper mine operations (LIFF + Dashboard)"""
@@ -261,20 +268,14 @@ class CopperMineService:
                 detail="同盟尚未設定銅礦規則，請聯繫盟主"
             )
 
-        # 2. 如果無法識別成員身份，仍需檢查規則是否存在
-        # 但無法驗證個人上限，允許申請（由 game_id 追蹤）
+        # 2. 如果無法識別成員身份，無法驗證個人上限
+        # 至少驗證等級是否符合第一座銅礦的規則
         if not member_id or not season_id:
-            # 至少驗證等級是否符合第一座銅礦的規則
-            first_rule = all_rules[0] if all_rules else None
-            if first_rule and not self._is_level_allowed(level, first_rule.allowed_level):
-                level_text = {
-                    "nine": "9 級",
-                    "ten": "10 級",
-                    "both": "9 或 10 級"
-                }
+            first_rule = all_rules[0]  # 一定存在，因為 max_allowed > 0
+            if not self._is_level_allowed(level, first_rule.allowed_level):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"銅礦等級限制：{level_text[first_rule.allowed_level]}"
+                    detail=f"銅礦等級限制：{LEVEL_TEXT[first_rule.allowed_level]}"
                 )
             return
 
@@ -314,14 +315,9 @@ class CopperMineService:
 
         # 6. 驗證等級限制
         if not self._is_level_allowed(level, rule.allowed_level):
-            level_text = {
-                "nine": "9 級",
-                "ten": "10 級",
-                "both": "9 或 10 級"
-            }
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"第 {next_tier} 座銅礦只能申請{level_text[rule.allowed_level]}"
+                detail=f"第 {next_tier} 座銅礦只能申請{LEVEL_TEXT[rule.allowed_level]}"
             )
 
     async def register_mine(
