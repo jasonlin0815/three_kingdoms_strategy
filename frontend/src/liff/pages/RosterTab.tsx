@@ -5,10 +5,10 @@
  */
 
 import { useState } from 'react'
-import { Plus, Check } from 'lucide-react'
+import { Plus, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useLiffMemberInfo, useLiffRegisterMember } from '../hooks/use-liff-member'
+import { useLiffMemberInfo, useLiffRegisterMember, useLiffUnregisterMember } from '../hooks/use-liff-member'
 import type { LiffSession } from '../hooks/use-liff-session'
 
 interface Props {
@@ -24,6 +24,7 @@ function formatDate(dateString: string): string {
 
 export function RosterTab({ session }: Props) {
   const [newGameId, setNewGameId] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const context = {
     lineUserId: session.lineUserId,
     lineGroupId: session.lineGroupId!,
@@ -32,6 +33,7 @@ export function RosterTab({ session }: Props) {
 
   const { data, isLoading, error } = useLiffMemberInfo(context)
   const registerMutation = useLiffRegisterMember(context)
+  const unregisterMutation = useLiffUnregisterMember(context)
 
   const handleRegister = async () => {
     if (!newGameId.trim()) return
@@ -41,6 +43,17 @@ export function RosterTab({ session }: Props) {
       setNewGameId('')
     } catch {
       // Error handled by mutation
+    }
+  }
+
+  const handleUnregister = async (gameId: string) => {
+    setDeletingId(gameId)
+    try {
+      await unregisterMutation.mutateAsync({ gameId })
+    } catch {
+      // Error handled by mutation
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -90,9 +103,9 @@ export function RosterTab({ session }: Props) {
         </div>
       </div>
 
-      {registerMutation.error && (
+      {(registerMutation.error || unregisterMutation.error) && (
         <p className="text-xs text-destructive">
-          {registerMutation.error.message}
+          {registerMutation.error?.message || unregisterMutation.error?.message}
         </p>
       )}
 
@@ -116,9 +129,24 @@ export function RosterTab({ session }: Props) {
                   <Check className="h-3.5 w-3.5 text-primary" />
                   <span className="text-sm font-medium">{acc.game_id}</span>
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  {formatDate(acc.created_at)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(acc.created_at)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleUnregister(acc.game_id)}
+                    disabled={deletingId === acc.game_id}
+                  >
+                    {deletingId === acc.game_id ? (
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <X className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

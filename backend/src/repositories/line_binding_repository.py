@@ -345,6 +345,30 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
             return None
         return UUID(data["id"])
 
+    async def delete_member_binding(
+        self,
+        alliance_id: UUID,
+        line_user_id: str,
+        game_id: str
+    ) -> bool:
+        """
+        Delete a member LINE binding
+
+        Returns True if a row was deleted, False if not found
+        """
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("member_line_bindings")
+            .delete()
+            .eq("alliance_id", str(alliance_id))
+            .eq("line_user_id", line_user_id)
+            .eq("game_id", game_id)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return len(data) > 0
+
     # =========================================================================
     # User Notification Operations (每用戶每群組只通知一次)
     # =========================================================================

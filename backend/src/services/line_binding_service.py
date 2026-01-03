@@ -450,6 +450,85 @@ class LineBindingService:
             registered_ids=registered_ids
         )
 
+    async def unregister_member(
+        self,
+        line_group_id: str,
+        line_user_id: str,
+        game_id: str
+    ) -> RegisterMemberResponse:
+        """
+        Unregister a game ID for a LINE user
+
+        Args:
+            line_group_id: LINE group ID
+            line_user_id: LINE user ID
+            game_id: Game ID to unregister
+
+        Returns:
+            RegisterMemberResponse with updated registration list
+
+        Raises:
+            HTTPException 404: If group not bound or game ID not found
+            HTTPException 403: If game ID belongs to another user
+        """
+        # Find alliance by group ID
+        group_binding = await self.repository.get_group_binding_by_line_group_id(
+            line_group_id
+        )
+
+        if not group_binding:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Group not bound to any alliance"
+            )
+
+        alliance_id = group_binding.alliance_id
+
+        # Verify ownership
+        existing = await self.repository.get_member_binding_by_game_id(
+            alliance_id=alliance_id,
+            game_id=game_id
+        )
+
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Game ID not registered"
+            )
+
+        if existing.line_user_id != line_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Game ID belongs to another user"
+            )
+
+        # Delete binding
+        await self.repository.delete_member_binding(
+            alliance_id=alliance_id,
+            line_user_id=line_user_id,
+            game_id=game_id
+        )
+
+        # Return updated list
+        bindings = await self.repository.get_member_bindings_by_line_user(
+            alliance_id=alliance_id,
+            line_user_id=line_user_id
+        )
+
+        registered_ids = [
+            RegisteredAccount(
+                game_id=b.game_id,
+                display_name=b.line_display_name,
+                created_at=b.created_at
+            )
+            for b in bindings
+        ]
+
+        return RegisterMemberResponse(
+            has_registered=len(registered_ids) > 0,
+            registered_ids=registered_ids
+        )
+
     # =========================================================================
     # LIFF Notification Operations (Webhook - 每用戶每群組只通知一次)
     # =========================================================================

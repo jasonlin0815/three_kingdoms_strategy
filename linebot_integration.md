@@ -155,6 +155,7 @@ curl -H "Authorization: Bearer {ACCESS_TOKEN}" \
 | GET | `/api/v1/linebot/member/info` | 查詢成員資訊 |
 | GET | `/api/v1/linebot/member/performance` | 查詢成員表現 |
 | POST | `/api/v1/linebot/member/register` | 註冊遊戲 ID |
+| DELETE | `/api/v1/linebot/member/unregister` | 刪除遊戲 ID 綁定 |
 | GET | `/api/v1/linebot/copper/list` | 查詢銅礦列表 |
 | POST | `/api/v1/linebot/copper/register` | 註冊銅礦 |
 | DELETE | `/api/v1/linebot/copper/{id}` | 刪除銅礦 |

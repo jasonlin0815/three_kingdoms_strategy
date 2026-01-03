@@ -231,6 +231,26 @@ async def register_game_id(
     )
 
 
+@router.delete(
+    "/member/unregister",
+    response_model=RegisterMemberResponse,
+    summary="Unregister game ID",
+    description="Remove a game ID registration for a LINE user"
+)
+async def unregister_game_id(
+    service: LineBindingServiceDep,
+    u: Annotated[str, Query(description="LINE user ID")],
+    g: Annotated[str, Query(description="LINE group ID")],
+    game_id: Annotated[str, Query(description="Game ID to unregister")],
+) -> RegisterMemberResponse:
+    """Unregister a game ID for a LINE user"""
+    return await service.unregister_member(
+        line_group_id=g,
+        line_user_id=u,
+        game_id=game_id
+    )
+
+
 # =============================================================================
 # Copper Mine LIFF Endpoints
 # =============================================================================

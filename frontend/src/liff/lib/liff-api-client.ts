@@ -81,6 +81,27 @@ export async function registerMember(
   })
 }
 
+export async function unregisterMember(
+  options: LiffApiOptions & { gameId: string }
+): Promise<RegisterMemberResponse> {
+  const url = new URL(`${API_BASE_URL}/api/v1/linebot/member/unregister`)
+  url.searchParams.set('u', options.lineUserId)
+  url.searchParams.set('g', options.lineGroupId)
+  url.searchParams.set('game_id', options.gameId)
+
+  const response = await fetch(url.toString(), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(error.detail || 'Unregister failed')
+  }
+
+  return response.json()
+}
+
 // Copper Mine API
 
 export interface CopperMine {
