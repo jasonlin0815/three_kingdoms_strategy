@@ -148,6 +148,34 @@ class SupabaseRepository[T: BaseModel]:
 
         return self._build_model(data)
 
+    async def get_by_ids(self, record_ids: list[UUID | str]) -> list[T]:
+        """
+        Get multiple records by IDs in a single query.
+
+        P2 修復: 批次查詢避免 N+1 問題
+
+        Args:
+            record_ids: List of record UUIDs or string IDs
+
+        Returns:
+            List of model instances (may be fewer than input if some IDs not found)
+        """
+        if not record_ids:
+            return []
+
+        id_strings = [str(rid) for rid in record_ids]
+
+        result = await self._execute_async(
+            lambda: self.client
+            .from_(self.table_name)
+            .select("*")
+            .in_("id", id_strings)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return self._build_models(data)
+
     async def get_all(self, limit: int = 100) -> list[T]:
         """
         Get all records (with limit)

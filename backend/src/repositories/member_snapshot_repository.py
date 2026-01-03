@@ -264,3 +264,53 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
             del data["csv_uploads"]
 
         return self._build_model(data)
+
+    async def get_latest_by_members_in_season(
+        self, member_ids: list[UUID], season_id: UUID
+    ) -> dict[str, MemberSnapshot]:
+        """
+        Get the latest snapshots for multiple members in a specific season.
+
+        P2 修復: 批次查詢避免 N+1 問題
+
+        Uses PostgreSQL DISTINCT ON to get only the latest snapshot per member.
+
+        Args:
+            member_ids: List of member UUIDs
+            season_id: Season UUID
+
+        Returns:
+            Dict mapping member_id (string) to their latest MemberSnapshot
+
+        符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
+        """
+        if not member_ids:
+            return {}
+
+        member_id_strings = [str(mid) for mid in member_ids]
+
+        # Use RPC for DISTINCT ON query (Supabase doesn't support it directly)
+        # Fallback: get all snapshots and filter in Python
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
+            .select("*, csv_uploads!inner(season_id)")
+            .in_("member_id", member_id_strings)
+            .eq("csv_uploads.season_id", str(season_id))
+            .order("member_id")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+
+        # Group by member_id and keep only the latest (first in each group)
+        latest_by_member: dict[str, MemberSnapshot] = {}
+        for row in data:
+            member_id_str = row["member_id"]
+            if member_id_str not in latest_by_member:
+                # Remove joined data before building model
+                if "csv_uploads" in row:
+                    del row["csv_uploads"]
+                latest_by_member[member_id_str] = self._build_model(row)
+
+        return latest_by_member

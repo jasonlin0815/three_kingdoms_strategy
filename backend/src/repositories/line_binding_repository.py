@@ -284,6 +284,38 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
             return None
         return MemberLineBinding(**data)
 
+    async def get_member_bindings_by_game_ids(
+        self,
+        alliance_id: UUID,
+        game_ids: list[str]
+    ) -> list[MemberLineBinding]:
+        """
+        Get member LINE bindings for multiple game IDs in a single query.
+
+        P2 修復: 批次查詢避免 N+1 問題
+
+        Args:
+            alliance_id: Alliance UUID
+            game_ids: List of game IDs to look up
+
+        Returns:
+            List of MemberLineBinding instances
+        """
+        if not game_ids:
+            return []
+
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("member_line_bindings")
+            .select("*")
+            .eq("alliance_id", str(alliance_id))
+            .in_("game_id", game_ids)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return [MemberLineBinding(**row) for row in data]
+
     async def create_member_binding(
         self,
         alliance_id: UUID,

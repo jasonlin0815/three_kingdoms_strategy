@@ -92,15 +92,19 @@ class CopperMineService:
         """
         Get copper mines list for LIFF display
 
+        顯示全同盟銅礦位置（設計決策：銅礦位置為公開資訊）
+        刪除權限由 delete_mine 單獨控制（只能刪除自己的）
+
         Args:
             line_group_id: LINE group ID
-            line_user_id: LINE user ID (for potential filtering)
+            line_user_id: LINE user ID (傳入但不用於過濾，列表顯示全同盟)
 
         Returns:
-            CopperMineListResponse with mines and total count
+            CopperMineListResponse with all alliance mines
         """
         alliance_id = await self._get_alliance_id_from_group(line_group_id)
 
+        # 顯示全同盟銅礦（公開資訊）
         mines = await self.repository.get_mines_by_alliance(alliance_id)
 
         return CopperMineListResponse(
@@ -332,6 +336,8 @@ class CopperMineService:
         """
         Delete a copper mine (LIFF)
 
+        P0 修復: 添加所有權驗證，只能刪除自己註冊的銅礦
+
         Args:
             mine_id: Mine UUID to delete
             line_group_id: LINE group ID (for authorization)
@@ -342,15 +348,31 @@ class CopperMineService:
 
         Raises:
             HTTPException 404: If group not bound or mine not found
+            HTTPException 403: If user is not the owner of the mine
         """
         # Validate group binding
         await self._get_alliance_id_from_group(line_group_id)
+
+        # P0 修復: 獲取銅礦並驗證所有權
+        mine = await self.repository.get_by_id(mine_id)
+        if not mine:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Copper mine not found"
+            )
+
+        # P0 修復: 驗證是否為本人註冊
+        if mine.registered_by_line_user_id != line_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能刪除自己註冊的銅礦"
+            )
 
         deleted = await self.repository.delete_mine(mine_id)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Copper mine not found"
+                detail="Failed to delete copper mine"
             )
 
         return True
@@ -365,14 +387,40 @@ class CopperMineService:
         alliance_id: UUID
     ) -> list[CopperMineOwnershipResponse]:
         """
-        Get copper mine ownerships for Dashboard display
+        Get copper mine ownerships for Dashboard display.
 
-        Joins member data for display purposes.
+        P2 修復: 使用批次查詢避免 N+1 問題
+        原本: 1 + N*3 queries (N = ownership 數量)
+        優化後: 4 queries (ownerships + members + bindings + snapshots)
         """
-        # Get raw ownership data
+        # 1. Get raw ownership data
         ownerships = await self.repository.get_ownerships_by_season_simple(season_id)
+        if not ownerships:
+            return []
 
-        # Get member info for each ownership
+        # 2. Collect unique member_ids and game_ids
+        member_ids: list[UUID] = []
+        game_ids: list[str] = []
+        for ownership in ownerships:
+            if ownership.get("member_id"):
+                member_ids.append(UUID(ownership["member_id"]))
+            if ownership.get("game_id"):
+                game_ids.append(ownership["game_id"])
+
+        # 3. Batch fetch all related data
+        members_list = await self.member_repository.get_by_ids(member_ids) if member_ids else []
+        bindings_list = await self.line_binding_repository.get_member_bindings_by_game_ids(
+            alliance_id, game_ids
+        ) if game_ids else []
+        snapshots_map = await self.snapshot_repository.get_latest_by_members_in_season(
+            member_ids, season_id
+        ) if member_ids else {}
+
+        # 4. Build lookup maps
+        members_map = {str(m.id): m for m in members_list}
+        bindings_map = {b.game_id: b for b in bindings_list}
+
+        # 5. Build response list
         responses = []
         for ownership in ownerships:
             member_id = ownership.get("member_id")
@@ -381,20 +429,16 @@ class CopperMineService:
             line_display_name = None
 
             if member_id:
-                member = await self.member_repository.get_by_id(UUID(member_id))
+                member = members_map.get(member_id)
                 if member:
                     member_name = member.name
-                    # Get LINE display name using game_id (member name)
-                    line_binding = await self.line_binding_repository.get_member_binding_by_game_id(
-                        alliance_id,
-                        member_name
-                    )
-                    if line_binding:
-                        line_display_name = line_binding.line_display_name
-                # Get latest snapshot for group info
-                snapshot = await self._get_latest_snapshot(UUID(member_id), season_id)
+                    binding = bindings_map.get(member_name)
+                    if binding:
+                        line_display_name = binding.line_display_name
+
+                snapshot = snapshots_map.get(member_id)
                 if snapshot:
-                    member_group = snapshot.get("group_name")
+                    member_group = snapshot.group_name
 
             responses.append(CopperMineOwnershipResponse(
                 id=str(ownership["id"]),
@@ -453,6 +497,8 @@ class CopperMineService:
         """
         Create a copper mine ownership (Dashboard)
 
+        P0 修復: 添加規則驗證，確保 Dashboard 和 LIFF 行為一致
+
         Args:
             season_id: Season UUID
             alliance_id: Alliance UUID
@@ -464,6 +510,7 @@ class CopperMineService:
 
         Raises:
             HTTPException 404: If member not found
+            HTTPException 403: If rule validation fails
             HTTPException 409: If coordinates already taken
         """
         # Validate member exists
@@ -480,6 +527,14 @@ class CopperMineService:
             coord_x=coord_x,
             coord_y=coord_y,
             season_id=season_id
+        )
+
+        # P0 修復: 驗證銅礦申請規則（與 LIFF 行為一致）
+        await self._validate_rule(
+            alliance_id=alliance_id,
+            member_id=member_id,
+            season_id=season_id,
+            level=level
         )
 
         # Create ownership
