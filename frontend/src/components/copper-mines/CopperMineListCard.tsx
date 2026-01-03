@@ -157,46 +157,53 @@ export function CopperMineListCard({ seasonId, seasonName }: CopperMineListCardP
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="overflow-x-auto -mx-6">
+              <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-24">座標</TableHead>
-                    <TableHead>遊戲 ID</TableHead>
-                    <TableHead>LINE 名稱</TableHead>
-                    <TableHead className="w-20">等級</TableHead>
-                    <TableHead className="w-20">組別</TableHead>
-                    <TableHead className="w-24">申請日期</TableHead>
-                    {canManage && <TableHead className="w-16 text-right">操作</TableHead>}
+                    <TableHead className="w-[100px] pl-6">座標</TableHead>
+                    <TableHead className="w-[20%] min-w-[100px]">遊戲 ID</TableHead>
+                    <TableHead className="w-[20%] min-w-[100px] hidden sm:table-cell">LINE 名稱</TableHead>
+                    <TableHead className="w-[70px] text-center">等級</TableHead>
+                    <TableHead className="w-[80px] text-center">組別</TableHead>
+                    <TableHead className="w-[80px] hidden md:table-cell">申請日期</TableHead>
+                    {canManage && <TableHead className="w-[50px] pr-6 text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredOwnerships.map((ownership) => (
                     <TableRow key={ownership.id}>
-                      <TableCell className="font-mono text-sm">
+                      <TableCell className="font-mono text-sm whitespace-nowrap pl-6">
                         {formatCoord(ownership.coord_x, ownership.coord_y)}
                       </TableCell>
-                      <TableCell className="font-medium">{ownership.member_name}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="font-medium truncate max-w-[150px]">
+                        {ownership.member_name}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground truncate max-w-[150px] hidden sm:table-cell">
                         {ownership.line_display_name || '-'}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={ownership.level === 10 ? 'default' : 'secondary'}>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={ownership.level === 10 ? 'default' : 'secondary'}
+                          className="whitespace-nowrap"
+                        >
                           {ownership.level} 級
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {ownership.member_group ? (
-                          <Badge variant="outline">{ownership.member_group}</Badge>
+                          <Badge variant="outline" className="whitespace-nowrap">
+                            {ownership.member_group}
+                          </Badge>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm hidden md:table-cell">
                         {formatDate(ownership.applied_at)}
                       </TableCell>
                       {canManage && (
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-6">
                           <Button
                             variant="ghost"
                             size="icon"
