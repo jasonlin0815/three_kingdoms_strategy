@@ -180,7 +180,8 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         alliance_id: UUID,
         line_group_id: str,
         bound_by_line_user_id: str,
-        group_name: str | None = None
+        group_name: str | None = None,
+        group_picture_url: str | None = None
     ) -> LineGroupBinding:
         """Create a new group binding"""
         result = await self._execute_async(
@@ -190,6 +191,7 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
                 "alliance_id": str(alliance_id),
                 "line_group_id": line_group_id,
                 "group_name": group_name,
+                "group_picture_url": group_picture_url,
                 "bound_by_line_user_id": bound_by_line_user_id,
                 "is_active": True
             })
@@ -211,6 +213,33 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
             .eq("id", str(binding_id))
             .execute()
         )
+
+    async def update_group_info(
+        self,
+        binding_id: UUID,
+        group_name: str | None = None,
+        group_picture_url: str | None = None
+    ) -> LineGroupBinding:
+        """Update group name and/or picture for an existing binding"""
+        update_data: dict[str, str] = {
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        if group_name is not None:
+            update_data["group_name"] = group_name
+        if group_picture_url is not None:
+            update_data["group_picture_url"] = group_picture_url
+
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("line_group_bindings")
+            .update(update_data)
+            .eq("id", str(binding_id))
+            .select("*")
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, expect_single=True)
+        return LineGroupBinding(**data)
 
     # =========================================================================
     # Member LINE Bindings Operations
@@ -317,35 +346,39 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         return UUID(data["id"])
 
     # =========================================================================
-    # Group Reminder Cooldown Operations
+    # User Notification Operations (每用戶每群組只通知一次)
     # =========================================================================
 
-    async def get_group_reminder_cooldown(
+    async def has_user_been_notified(
         self,
-        line_group_id: str
-    ) -> datetime | None:
-        """Get last reminder time for a group"""
+        line_group_id: str,
+        line_user_id: str
+    ) -> bool:
+        """Check if user has already been notified in this group"""
         result = await self._execute_async(
             lambda: self.client
-            .from_("line_group_reminder_cooldowns")
-            .select("last_reminder_at")
+            .from_("line_user_notifications")
+            .select("line_user_id")
             .eq("line_group_id", line_group_id)
+            .eq("line_user_id", line_user_id)
             .execute()
         )
 
-        data = self._handle_supabase_result(result, allow_empty=True, expect_single=True)
-        if not data:
-            return None
-        return datetime.fromisoformat(data["last_reminder_at"].replace("Z", "+00:00"))
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return len(data) > 0
 
-    async def upsert_group_reminder_cooldown(self, line_group_id: str) -> None:
-        """Update or insert group reminder cooldown timestamp"""
+    async def record_user_notification(
+        self,
+        line_group_id: str,
+        line_user_id: str
+    ) -> None:
+        """Record that user has been notified in this group"""
         await self._execute_async(
             lambda: self.client
-            .from_("line_group_reminder_cooldowns")
+            .from_("line_user_notifications")
             .upsert({
                 "line_group_id": line_group_id,
-                "last_reminder_at": datetime.utcnow().isoformat()
+                "line_user_id": line_user_id
             })
             .execute()
         )
@@ -356,27 +389,12 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         line_user_id: str
     ) -> bool:
         """Check if a LINE user has any registered game IDs in the group's alliance"""
-        # First get the alliance for this group
         group_binding = await self.get_group_binding_by_line_group_id(line_group_id)
         if not group_binding:
             return False
 
-        # Check if user has any bindings
         bindings = await self.get_member_bindings_by_line_user(
             alliance_id=group_binding.alliance_id,
             line_user_id=line_user_id
         )
         return len(bindings) > 0
-
-    async def is_user_registered_anywhere(self, line_user_id: str) -> bool:
-        """Check if a LINE user has any registered game IDs in any alliance"""
-        result = await self._execute_async(
-            lambda: self.client
-            .from_("member_line_bindings")
-            .select("id", count="exact")
-            .eq("line_user_id", line_user_id)
-            .limit(1)
-            .execute()
-        )
-
-        return (result.count or 0) > 0

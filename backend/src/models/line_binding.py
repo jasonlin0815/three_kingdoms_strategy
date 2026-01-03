@@ -57,6 +57,7 @@ class LineGroupBindingCreate(BaseModel):
     alliance_id: UUID
     line_group_id: str = Field(..., max_length=64)
     group_name: str | None = Field(None, max_length=255)
+    group_picture_url: str | None = None
     bound_by_line_user_id: str = Field(..., max_length=64)
 
 
@@ -69,6 +70,7 @@ class LineGroupBinding(BaseModel):
     alliance_id: UUID
     line_group_id: str
     group_name: str | None = None
+    group_picture_url: str | None = None
     bound_by_line_user_id: str
     is_active: bool = True
     bound_at: datetime
@@ -83,6 +85,7 @@ class LineGroupBindingResponse(BaseModel):
     alliance_id: UUID
     line_group_id: str
     group_name: str | None
+    group_picture_url: str | None = None
     bound_at: datetime
     is_active: bool
     member_count: int = 0

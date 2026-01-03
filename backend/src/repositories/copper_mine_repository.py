@@ -2,6 +2,7 @@
 Copper Mine Repository
 
 Data access layer for copper_mines table.
+Supports both LIFF registration and Dashboard ownership management.
 
 符合 CLAUDE.md 🔴:
 - Inherits from SupabaseRepository
@@ -10,6 +11,7 @@ Data access layer for copper_mines table.
 """
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from src.models.copper_mine import CopperMine
@@ -97,10 +99,12 @@ class CopperMineRepository(SupabaseRepository[CopperMine]):
         coord_x: int,
         coord_y: int,
         level: int,
-        notes: str | None = None
+        notes: str | None = None,
+        season_id: UUID | None = None,
+        member_id: UUID | None = None
     ) -> CopperMine:
-        """Create a new copper mine record"""
-        insert_data = {
+        """Create a new copper mine record (LIFF registration)"""
+        insert_data: dict[str, Any] = {
             "alliance_id": str(alliance_id),
             "registered_by_line_user_id": registered_by_line_user_id,
             "game_id": game_id,
@@ -111,6 +115,10 @@ class CopperMineRepository(SupabaseRepository[CopperMine]):
         }
         if notes:
             insert_data["notes"] = notes
+        if season_id:
+            insert_data["season_id"] = str(season_id)
+        if member_id:
+            insert_data["member_id"] = str(member_id)
 
         result = await self._execute_async(
             lambda: self.client
@@ -164,6 +172,111 @@ class CopperMineRepository(SupabaseRepository[CopperMine]):
             .from_("copper_mines")
             .select("id", count="exact")
             .eq("alliance_id", str(alliance_id))
+            .execute()
+        )
+
+        return result.count or 0
+
+    # =========================================================================
+    # Dashboard Methods (with member data joins)
+    # =========================================================================
+
+    async def get_ownerships_by_season(
+        self,
+        season_id: UUID
+    ) -> list[dict]:
+        """
+        Get copper mines for a season with member info (Dashboard view)
+
+        Returns raw dicts with joined member data for Dashboard display.
+        """
+        # Use Supabase's foreign key join syntax
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("copper_mines")
+            .select(
+                "id, season_id, member_id, coord_x, coord_y, level, "
+                "registered_at, game_id, "
+                "members!copper_mines_member_id_fkey(name, id), "
+                "member_snapshots!inner(group_name)"
+            )
+            .eq("season_id", str(season_id))
+            .order("registered_at", desc=True)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return data if isinstance(data, list) else []
+
+    async def get_ownerships_by_season_simple(
+        self,
+        season_id: UUID
+    ) -> list[dict]:
+        """
+        Get copper mines for a season (simplified query without complex joins)
+
+        For Dashboard, we'll join the data in service layer.
+        """
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("copper_mines")
+            .select("*")
+            .eq("season_id", str(season_id))
+            .order("registered_at", desc=True)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return data if isinstance(data, list) else []
+
+    async def create_ownership(
+        self,
+        season_id: UUID,
+        alliance_id: UUID,
+        member_id: UUID,
+        game_id: str,
+        coord_x: int,
+        coord_y: int,
+        level: int,
+        applied_at: datetime | None = None
+    ) -> CopperMine:
+        """Create a copper mine ownership record (Dashboard)"""
+        insert_data: dict[str, Any] = {
+            "alliance_id": str(alliance_id),
+            "season_id": str(season_id),
+            "member_id": str(member_id),
+            "game_id": game_id,
+            "coord_x": coord_x,
+            "coord_y": coord_y,
+            "level": level,
+            "status": "active",
+            "registered_by_line_user_id": "dashboard",  # Mark as Dashboard entry
+        }
+        if applied_at:
+            insert_data["registered_at"] = applied_at.isoformat()
+
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("copper_mines")
+            .insert(insert_data)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, expect_single=True)
+        return CopperMine(**data)
+
+    async def count_member_mines(
+        self,
+        season_id: UUID,
+        member_id: UUID
+    ) -> int:
+        """Count how many mines a member owns in a season"""
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("copper_mines")
+            .select("id", count="exact")
+            .eq("season_id", str(season_id))
+            .eq("member_id", str(member_id))
             .execute()
         )
 

@@ -23,6 +23,7 @@ export interface LineGroupBinding {
   readonly alliance_id: string
   readonly line_group_id: string
   readonly group_name: string | null
+  readonly group_picture_url: string | null
   readonly bound_at: string
   readonly is_active: boolean
   readonly member_count: number

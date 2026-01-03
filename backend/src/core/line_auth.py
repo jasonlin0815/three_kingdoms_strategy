@@ -139,3 +139,36 @@ def create_liff_url(liff_id: str, group_id: str) -> str:
         Full LIFF URL with parameters
     """
     return f"https://liff.line.me/{liff_id}?g={group_id}"
+
+
+class LineGroupInfo:
+    """LINE group information from API"""
+
+    def __init__(self, name: str | None, picture_url: str | None):
+        self.name = name
+        self.picture_url = picture_url
+
+
+def get_group_info(group_id: str) -> LineGroupInfo | None:
+    """
+    Get LINE group info (name and picture) via Messaging API
+
+    Args:
+        group_id: LINE group ID
+
+    Returns:
+        LineGroupInfo with name and picture_url, or None if failed
+    """
+    line_bot = get_line_bot_api()
+    if not line_bot:
+        return None
+
+    try:
+        summary = line_bot.get_group_summary(group_id)
+        return LineGroupInfo(
+            name=summary.group_name,
+            picture_url=summary.picture_url
+        )
+    except Exception as e:
+        logger.warning(f"Failed to get group info for {group_id}: {e}")
+        return None

@@ -34,10 +34,6 @@ import {
 import { useCanManageWeights } from '@/hooks/use-user-role'
 import type { CopperMineRule, AllowedLevel } from '@/types/copper-mine'
 
-interface CopperMineRulesCardProps {
-  readonly allianceId: string
-}
-
 const LEVEL_OPTIONS: { value: AllowedLevel; label: string }[] = [
   { value: 'both', label: '9 或 10 級' },
   { value: 'nine', label: '僅 9 級' },
@@ -48,9 +44,9 @@ function formatMerit(value: number): string {
   return value.toLocaleString('zh-TW')
 }
 
-export function CopperMineRulesCard({ allianceId }: CopperMineRulesCardProps) {
+export function CopperMineRulesCard() {
   const canManage = useCanManageWeights()
-  const { data: rules, isLoading } = useCopperMineRules(allianceId)
+  const { data: rules, isLoading } = useCopperMineRules()
   const createMutation = useCreateCopperMineRule()
   const updateMutation = useUpdateCopperMineRule()
   const deleteMutation = useDeleteCopperMineRule()
@@ -69,10 +65,25 @@ export function CopperMineRulesCard({ allianceId }: CopperMineRulesCardProps) {
   const nextTier = sortedRules.length > 0 ? sortedRules[sortedRules.length - 1].tier + 1 : 1
   const canAddMore = nextTier <= 10
 
-  // Get minimum merit for validation
+  // Get minimum merit for validation (must be greater than previous tier)
   function getMinMerit(tier: number): number {
     const prevRule = sortedRules.find((r) => r.tier === tier - 1)
     return prevRule ? prevRule.required_merit + 1 : 1
+  }
+
+  // Get maximum merit for validation (must be less than next tier)
+  function getMaxMerit(tier: number): number | null {
+    const nextRule = sortedRules.find((r) => r.tier === tier + 1)
+    return nextRule ? nextRule.required_merit - 1 : null
+  }
+
+  // Validate merit value against min and max constraints
+  function isValidMerit(value: number, tier: number): boolean {
+    const min = getMinMerit(tier)
+    const max = getMaxMerit(tier)
+    if (value < min) return false
+    if (max !== null && value > max) return false
+    return true
   }
 
   // Start editing a rule
@@ -92,13 +103,11 @@ export function CopperMineRulesCard({ allianceId }: CopperMineRulesCardProps) {
   // Save edited rule
   async function saveEdit(rule: CopperMineRule) {
     const meritValue = parseInt(editMerit, 10)
-    const minMerit = getMinMerit(rule.tier)
 
-    if (isNaN(meritValue) || meritValue < minMerit) return
+    if (isNaN(meritValue) || !isValidMerit(meritValue, rule.tier)) return
 
     await updateMutation.mutateAsync({
       ruleId: rule.id,
-      allianceId,
       data: {
         required_merit: meritValue,
         allowed_level: editLevel,
@@ -129,12 +138,9 @@ export function CopperMineRulesCard({ allianceId }: CopperMineRulesCardProps) {
     if (isNaN(meritValue) || meritValue < minMerit) return
 
     await createMutation.mutateAsync({
-      allianceId,
-      data: {
-        tier: nextTier,
-        required_merit: meritValue,
-        allowed_level: newLevel,
-      },
+      tier: nextTier,
+      required_merit: meritValue,
+      allowed_level: newLevel,
     })
     cancelAdd()
   }
@@ -142,10 +148,7 @@ export function CopperMineRulesCard({ allianceId }: CopperMineRulesCardProps) {
   // Delete rule
   async function handleDelete(rule: CopperMineRule) {
     if (!confirm(`確定要刪除第 ${rule.tier} 座的規則嗎？`)) return
-    await deleteMutation.mutateAsync({
-      ruleId: rule.id,
-      allianceId,
-    })
+    await deleteMutation.mutateAsync(rule.id)
   }
 
   const isAnyLoading =
@@ -195,6 +198,7 @@ export function CopperMineRulesCard({ allianceId }: CopperMineRulesCardProps) {
                           onChange={(e) => setEditMerit(e.target.value)}
                           className="h-8 w-32 font-mono"
                           min={getMinMerit(rule.tier)}
+                          max={getMaxMerit(rule.tier) ?? undefined}
                           autoFocus
                         />
                       ) : (

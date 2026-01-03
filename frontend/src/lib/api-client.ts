@@ -47,6 +47,14 @@ import type {
   LineBindingCode,
   LineBindingStatusResponse
 } from '@/types/line-binding'
+import type {
+  CopperMineRule,
+  CreateCopperMineRuleRequest,
+  UpdateCopperMineRuleRequest,
+  CopperMineOwnership,
+  CreateCopperMineOwnershipRequest,
+  CopperMineOwnershipListResponse
+} from '@/types/copper-mine'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8087'
 
@@ -675,6 +683,87 @@ class ApiClient {
    */
   async unbindLineGroup(): Promise<void> {
     await this.client.delete('/api/v1/linebot/binding')
+  }
+
+  // ==================== Copper Mine API ====================
+
+  /**
+   * Get all copper mine rules for current user's alliance
+   */
+  async getCopperMineRules(): Promise<CopperMineRule[]> {
+    const response = await this.client.get<CopperMineRule[]>(
+      '/api/v1/copper-mines/rules'
+    )
+    return response.data
+  }
+
+  /**
+   * Create a new copper mine rule
+   */
+  async createCopperMineRule(data: CreateCopperMineRuleRequest): Promise<CopperMineRule> {
+    const response = await this.client.post<CopperMineRule>(
+      '/api/v1/copper-mines/rules',
+      data
+    )
+    return response.data
+  }
+
+  /**
+   * Update a copper mine rule
+   */
+  async updateCopperMineRule(
+    ruleId: string,
+    data: UpdateCopperMineRuleRequest
+  ): Promise<CopperMineRule> {
+    const response = await this.client.patch<CopperMineRule>(
+      `/api/v1/copper-mines/rules/${ruleId}`,
+      data
+    )
+    return response.data
+  }
+
+  /**
+   * Delete a copper mine rule
+   */
+  async deleteCopperMineRule(ruleId: string): Promise<void> {
+    await this.client.delete(`/api/v1/copper-mines/rules/${ruleId}`)
+  }
+
+  /**
+   * Get copper mine ownerships for a season
+   */
+  async getCopperMineOwnerships(seasonId: string): Promise<CopperMineOwnershipListResponse> {
+    const response = await this.client.get<CopperMineOwnershipListResponse>(
+      '/api/v1/copper-mines/ownerships',
+      {
+        params: { season_id: seasonId }
+      }
+    )
+    return response.data
+  }
+
+  /**
+   * Create a copper mine ownership
+   */
+  async createCopperMineOwnership(
+    seasonId: string,
+    data: CreateCopperMineOwnershipRequest
+  ): Promise<CopperMineOwnership> {
+    const response = await this.client.post<CopperMineOwnership>(
+      '/api/v1/copper-mines/ownerships',
+      data,
+      {
+        params: { season_id: seasonId }
+      }
+    )
+    return response.data
+  }
+
+  /**
+   * Delete a copper mine ownership
+   */
+  async deleteCopperMineOwnership(ownershipId: string): Promise<void> {
+    await this.client.delete(`/api/v1/copper-mines/ownerships/${ownershipId}`)
   }
 }
 

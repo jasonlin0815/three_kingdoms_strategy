@@ -3,11 +3,10 @@
  *
  * Hooks for copper mine rules (alliance level) and ownership records (season level).
  * Features optimistic updates for seamless UX.
- *
- * TODO: Connect to real API endpoints when backend is ready
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiClient } from '@/lib/api-client'
 import type {
   CopperMineRule,
   CopperMineOwnership,
@@ -24,10 +23,8 @@ import type {
 export const copperMineKeys = {
   all: ['copper-mines'] as const,
 
-  // Rules (alliance level)
+  // Rules (alliance level - auto-determined by backend)
   rules: () => [...copperMineKeys.all, 'rules'] as const,
-  rulesByAlliance: (allianceId: string) =>
-    [...copperMineKeys.rules(), allianceId] as const,
 
   // Ownerships (season level)
   ownerships: () => [...copperMineKeys.all, 'ownerships'] as const,
@@ -40,158 +37,16 @@ export const copperMineKeys = {
 }
 
 // =============================================================================
-// Mock Data Storage (Temporary - Replace with API calls)
-// =============================================================================
-
-let mockRules: CopperMineRule[] = [
-  {
-    id: 'rule-1',
-    alliance_id: 'mock-alliance',
-    tier: 1,
-    required_merit: 50000,
-    allowed_level: 'both',
-    created_at: '2025-01-01T00:00:00Z',
-    updated_at: '2025-01-01T00:00:00Z',
-  },
-  {
-    id: 'rule-2',
-    alliance_id: 'mock-alliance',
-    tier: 2,
-    required_merit: 100000,
-    allowed_level: 'both',
-    created_at: '2025-01-01T00:00:00Z',
-    updated_at: '2025-01-01T00:00:00Z',
-  },
-  {
-    id: 'rule-3',
-    alliance_id: 'mock-alliance',
-    tier: 3,
-    required_merit: 200000,
-    allowed_level: 'ten',
-    created_at: '2025-01-01T00:00:00Z',
-    updated_at: '2025-01-01T00:00:00Z',
-  },
-]
-
-let mockOwnerships: CopperMineOwnership[] = [
-  {
-    id: 'own-1',
-    season_id: 'mock-season',
-    member_id: 'member-1',
-    coord_x: 123,
-    coord_y: 456,
-    level: 10,
-    applied_at: '2025-01-02T00:00:00Z',
-    created_at: '2025-01-02T00:00:00Z',
-    member_name: '張飛',
-    member_group: 'A組',
-    line_display_name: '@zhangfei',
-  },
-  {
-    id: 'own-2',
-    season_id: 'mock-season',
-    member_id: 'member-2',
-    coord_x: 789,
-    coord_y: 12,
-    level: 9,
-    applied_at: '2025-01-03T00:00:00Z',
-    created_at: '2025-01-03T00:00:00Z',
-    member_name: '關羽',
-    member_group: 'B組',
-    line_display_name: null,
-  },
-]
-
-// =============================================================================
-// Mock API Functions (Temporary)
-// =============================================================================
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function mockGetRules(_allianceId?: string): Promise<CopperMineRule[]> {
-  await new Promise((r) => setTimeout(r, 300))
-  return [...mockRules].sort((a, b) => a.tier - b.tier)
-}
-
-async function mockCreateRule(
-  _allianceId: string,
-  data: CreateCopperMineRuleRequest
-): Promise<CopperMineRule> {
-  await new Promise((r) => setTimeout(r, 300))
-  const newRule: CopperMineRule = {
-    id: `rule-${Date.now()}`,
-    alliance_id: 'mock-alliance',
-    ...data,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }
-  mockRules.push(newRule)
-  return newRule
-}
-
-async function mockUpdateRule(
-  ruleId: string,
-  data: UpdateCopperMineRuleRequest
-): Promise<CopperMineRule> {
-  await new Promise((r) => setTimeout(r, 300))
-  const index = mockRules.findIndex((r) => r.id === ruleId)
-  if (index === -1) throw new Error('Rule not found')
-  mockRules[index] = {
-    ...mockRules[index],
-    ...data,
-    updated_at: new Date().toISOString(),
-  }
-  return mockRules[index]
-}
-
-async function mockDeleteRule(ruleId: string): Promise<void> {
-  await new Promise((r) => setTimeout(r, 300))
-  mockRules = mockRules.filter((r) => r.id !== ruleId)
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function mockGetOwnerships(_seasonId?: string): Promise<CopperMineOwnership[]> {
-  await new Promise((r) => setTimeout(r, 300))
-  return [...mockOwnerships].sort(
-    (a, b) => new Date(b.applied_at).getTime() - new Date(a.applied_at).getTime()
-  )
-}
-
-async function mockCreateOwnership(
-  seasonId: string,
-  data: CreateCopperMineOwnershipRequest
-): Promise<CopperMineOwnership> {
-  await new Promise((r) => setTimeout(r, 300))
-  const newOwnership: CopperMineOwnership = {
-    id: `own-${Date.now()}`,
-    season_id: seasonId,
-    ...data,
-    applied_at: data.applied_at || new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    member_name: '新成員',
-    member_group: null,
-    line_display_name: null,
-  }
-  mockOwnerships.push(newOwnership)
-  return newOwnership
-}
-
-async function mockDeleteOwnership(ownershipId: string): Promise<void> {
-  await new Promise((r) => setTimeout(r, 300))
-  mockOwnerships = mockOwnerships.filter((o) => o.id !== ownershipId)
-}
-
-// =============================================================================
 // Query Hooks - Rules
 // =============================================================================
 
 /**
- * Get all copper mine rules for an alliance
+ * Get all copper mine rules for current user's alliance
  */
-export function useCopperMineRules(allianceId: string | null) {
+export function useCopperMineRules() {
   return useQuery({
-    queryKey: copperMineKeys.rulesByAlliance(allianceId || ''),
-    queryFn: () => mockGetRules(allianceId!),
-    enabled: !!allianceId,
+    queryKey: copperMineKeys.rules(),
+    queryFn: () => apiClient.getCopperMineRules(),
   })
 }
 
@@ -206,55 +61,47 @@ export function useCreateCopperMineRule() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({
-      allianceId,
-      data,
-    }: {
-      allianceId: string
-      data: CreateCopperMineRuleRequest
-    }) => mockCreateRule(allianceId, data),
+    mutationFn: (data: CreateCopperMineRuleRequest) =>
+      apiClient.createCopperMineRule(data),
 
-    onMutate: async ({ allianceId, data }) => {
+    onMutate: async (data) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({
-        queryKey: copperMineKeys.rulesByAlliance(allianceId),
+        queryKey: copperMineKeys.rules(),
       })
 
       // Snapshot current data
       const previousRules = queryClient.getQueryData<CopperMineRule[]>(
-        copperMineKeys.rulesByAlliance(allianceId)
+        copperMineKeys.rules()
       )
 
       // Optimistically add the new rule
       const optimisticRule: CopperMineRule = {
         id: `temp-${Date.now()}`,
-        alliance_id: allianceId,
+        alliance_id: 'temp',
         ...data,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
       queryClient.setQueryData<CopperMineRule[]>(
-        copperMineKeys.rulesByAlliance(allianceId),
+        copperMineKeys.rules(),
         (old) => [...(old || []), optimisticRule].sort((a, b) => a.tier - b.tier)
       )
 
       return { previousRules }
     },
 
-    onError: (_err, { allianceId }, context) => {
+    onError: (_err, _data, context) => {
       // Rollback on error
       if (context?.previousRules) {
-        queryClient.setQueryData(
-          copperMineKeys.rulesByAlliance(allianceId),
-          context.previousRules
-        )
+        queryClient.setQueryData(copperMineKeys.rules(), context.previousRules)
       }
     },
 
-    onSettled: (_data, _error, { allianceId }) => {
+    onSettled: () => {
       queryClient.invalidateQueries({
-        queryKey: copperMineKeys.rulesByAlliance(allianceId),
+        queryKey: copperMineKeys.rules(),
       })
     },
   })
@@ -272,45 +119,39 @@ export function useUpdateCopperMineRule() {
       data,
     }: {
       ruleId: string
-      allianceId: string
       data: UpdateCopperMineRuleRequest
-    }) => mockUpdateRule(ruleId, data),
+    }) => apiClient.updateCopperMineRule(ruleId, data),
 
-    onMutate: async ({ ruleId, allianceId, data }) => {
+    onMutate: async ({ ruleId, data }) => {
       await queryClient.cancelQueries({
-        queryKey: copperMineKeys.rulesByAlliance(allianceId),
+        queryKey: copperMineKeys.rules(),
       })
 
       const previousRules = queryClient.getQueryData<CopperMineRule[]>(
-        copperMineKeys.rulesByAlliance(allianceId)
+        copperMineKeys.rules()
       )
 
       // Optimistically update the rule
-      queryClient.setQueryData<CopperMineRule[]>(
-        copperMineKeys.rulesByAlliance(allianceId),
-        (old) =>
-          old?.map((rule) =>
-            rule.id === ruleId
-              ? { ...rule, ...data, updated_at: new Date().toISOString() }
-              : rule
-          )
+      queryClient.setQueryData<CopperMineRule[]>(copperMineKeys.rules(), (old) =>
+        old?.map((rule) =>
+          rule.id === ruleId
+            ? { ...rule, ...data, updated_at: new Date().toISOString() }
+            : rule
+        )
       )
 
       return { previousRules }
     },
 
-    onError: (_err, { allianceId }, context) => {
+    onError: (_err, _data, context) => {
       if (context?.previousRules) {
-        queryClient.setQueryData(
-          copperMineKeys.rulesByAlliance(allianceId),
-          context.previousRules
-        )
+        queryClient.setQueryData(copperMineKeys.rules(), context.previousRules)
       }
     },
 
-    onSettled: (_data, _error, { allianceId }) => {
+    onSettled: () => {
       queryClient.invalidateQueries({
-        queryKey: copperMineKeys.rulesByAlliance(allianceId),
+        queryKey: copperMineKeys.rules(),
       })
     },
   })
@@ -323,39 +164,34 @@ export function useDeleteCopperMineRule() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ ruleId }: { ruleId: string; allianceId: string }) =>
-      mockDeleteRule(ruleId),
+    mutationFn: (ruleId: string) => apiClient.deleteCopperMineRule(ruleId),
 
-    onMutate: async ({ ruleId, allianceId }) => {
+    onMutate: async (ruleId) => {
       await queryClient.cancelQueries({
-        queryKey: copperMineKeys.rulesByAlliance(allianceId),
+        queryKey: copperMineKeys.rules(),
       })
 
       const previousRules = queryClient.getQueryData<CopperMineRule[]>(
-        copperMineKeys.rulesByAlliance(allianceId)
+        copperMineKeys.rules()
       )
 
       // Optimistically remove the rule
-      queryClient.setQueryData<CopperMineRule[]>(
-        copperMineKeys.rulesByAlliance(allianceId),
-        (old) => old?.filter((rule) => rule.id !== ruleId)
+      queryClient.setQueryData<CopperMineRule[]>(copperMineKeys.rules(), (old) =>
+        old?.filter((rule) => rule.id !== ruleId)
       )
 
       return { previousRules }
     },
 
-    onError: (_err, { allianceId }, context) => {
+    onError: (_err, _data, context) => {
       if (context?.previousRules) {
-        queryClient.setQueryData(
-          copperMineKeys.rulesByAlliance(allianceId),
-          context.previousRules
-        )
+        queryClient.setQueryData(copperMineKeys.rules(), context.previousRules)
       }
     },
 
-    onSettled: (_data, _error, { allianceId }) => {
+    onSettled: () => {
       queryClient.invalidateQueries({
-        queryKey: copperMineKeys.rulesByAlliance(allianceId),
+        queryKey: copperMineKeys.rules(),
       })
     },
   })
@@ -371,7 +207,10 @@ export function useDeleteCopperMineRule() {
 export function useCopperMineOwnerships(seasonId: string | null) {
   return useQuery({
     queryKey: copperMineKeys.ownershipsBySeason(seasonId || ''),
-    queryFn: () => mockGetOwnerships(seasonId!),
+    queryFn: async () => {
+      const response = await apiClient.getCopperMineOwnerships(seasonId!)
+      return response.ownerships
+    },
     enabled: !!seasonId,
   })
 }
@@ -393,7 +232,7 @@ export function useCreateCopperMineOwnership() {
     }: {
       seasonId: string
       data: CreateCopperMineOwnershipRequest
-    }) => mockCreateOwnership(seasonId, data),
+    }) => apiClient.createCopperMineOwnership(seasonId, data),
 
     onMutate: async ({ seasonId, data }) => {
       await queryClient.cancelQueries({
@@ -451,7 +290,7 @@ export function useDeleteCopperMineOwnership() {
 
   return useMutation({
     mutationFn: ({ ownershipId }: { ownershipId: string; seasonId: string }) =>
-      mockDeleteOwnership(ownershipId),
+      apiClient.deleteCopperMineOwnership(ownershipId),
 
     onMutate: async ({ ownershipId, seasonId }) => {
       await queryClient.cancelQueries({
@@ -500,7 +339,7 @@ export function useMemberCopperMineStatus(
   memberId: string | null,
   totalMerit: number
 ) {
-  const { data: rules } = useCopperMineRules(seasonId ? 'mock-alliance' : null)
+  const { data: rules } = useCopperMineRules()
   const { data: ownerships } = useCopperMineOwnerships(seasonId)
 
   if (!rules || !ownerships || !memberId) {

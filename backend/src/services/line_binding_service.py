@@ -37,7 +37,6 @@ from src.repositories.line_binding_repository import LineBindingRepository
 BINDING_CODE_LENGTH = 6
 BINDING_CODE_EXPIRY_MINUTES = 5
 MAX_CODES_PER_HOUR = 3
-GROUP_REMINDER_COOLDOWN_MINUTES = 30  # Auto-reminder cooldown per group
 # Remove confusing characters: 0, O, I, 1
 BINDING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -146,6 +145,7 @@ class LineBindingService:
                     alliance_id=group_binding.alliance_id,
                     line_group_id=group_binding.line_group_id,
                     group_name=group_binding.group_name,
+                    group_picture_url=group_binding.group_picture_url,
                     bound_at=group_binding.bound_at,
                     is_active=group_binding.is_active,
                     member_count=member_count
@@ -196,6 +196,64 @@ class LineBindingService:
 
         await self.repository.deactivate_group_binding(group_binding.id)
 
+    async def refresh_group_info(self, alliance_id: UUID) -> LineGroupBindingResponse:
+        """
+        Refresh group name and picture from LINE API for an existing binding
+
+        Args:
+            alliance_id: Alliance UUID
+
+        Returns:
+            Updated LineGroupBindingResponse
+
+        Raises:
+            HTTPException 404: If no active binding found
+            HTTPException 502: If failed to fetch group info from LINE API
+        """
+        from src.core.line_auth import get_group_info
+
+        group_binding = await self.repository.get_active_group_binding_by_alliance(
+            alliance_id
+        )
+
+        if not group_binding:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active LINE group binding found"
+            )
+
+        # Fetch group info from LINE API
+        group_info = get_group_info(group_binding.line_group_id)
+
+        if not group_info or not group_info.name:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to fetch group info from LINE API"
+            )
+
+        # Update group info in database
+        updated_binding = await self.repository.update_group_info(
+            binding_id=group_binding.id,
+            group_name=group_info.name,
+            group_picture_url=group_info.picture_url
+        )
+
+        # Get member count
+        member_count = await self.repository.count_member_bindings_by_alliance(
+            alliance_id
+        )
+
+        return LineGroupBindingResponse(
+            id=updated_binding.id,
+            alliance_id=updated_binding.alliance_id,
+            line_group_id=updated_binding.line_group_id,
+            group_name=updated_binding.group_name,
+            group_picture_url=updated_binding.group_picture_url,
+            bound_at=updated_binding.bound_at,
+            is_active=updated_binding.is_active,
+            member_count=member_count
+        )
+
     # =========================================================================
     # Group Binding Operations (Webhook)
     # =========================================================================
@@ -205,7 +263,8 @@ class LineBindingService:
         code: str,
         line_group_id: str,
         line_user_id: str,
-        group_name: str | None = None
+        group_name: str | None = None,
+        group_picture_url: str | None = None
     ) -> tuple[bool, str, UUID | None]:
         """
         Validate binding code and create group binding
@@ -215,6 +274,7 @@ class LineBindingService:
             line_group_id: LINE group ID
             line_user_id: LINE user ID who initiated binding
             group_name: Optional group name
+            group_picture_url: Optional group picture URL
 
         Returns:
             Tuple of (success, message, alliance_id)
@@ -243,7 +303,8 @@ class LineBindingService:
             alliance_id=binding_code.alliance_id,
             line_group_id=line_group_id,
             bound_by_line_user_id=line_user_id,
-            group_name=group_name
+            group_name=group_name,
+            group_picture_url=group_picture_url
         )
 
         # Mark code as used
@@ -389,54 +450,29 @@ class LineBindingService:
             registered_ids=registered_ids
         )
 
-    async def get_group_status(self, line_group_id: str) -> dict | None:
-        """
-        Get group binding status for webhook status command
-
-        Args:
-            line_group_id: LINE group ID
-
-        Returns:
-            Dict with member_count and bound_at, or None if not bound
-        """
-        group_binding = await self.repository.get_group_binding_by_line_group_id(
-            line_group_id
-        )
-        if not group_binding:
-            return None
-
-        member_count = await self.repository.count_member_bindings_by_alliance(
-            group_binding.alliance_id
-        )
-
-        return {
-            "member_count": member_count,
-            "bound_at": group_binding.bound_at.strftime("%Y-%m-%d %H:%M")
-        }
-
     # =========================================================================
-    # Auto-Reminder Operations (Webhook)
+    # LIFF Notification Operations (Webhook - 每用戶每群組只通知一次)
     # =========================================================================
 
-    async def should_send_binding_reminder(
+    async def should_send_liff_notification(
         self,
         line_group_id: str,
         line_user_id: str
     ) -> bool:
         """
-        Check if we should send an auto-reminder to register game ID
+        Check if we should send LIFF notification to this user
 
         Conditions for sending:
         1. Group is bound to an alliance
         2. User has NOT registered any game ID
-        3. Group hasn't received a reminder in the last 30 minutes
+        3. User has NOT been notified before in this group
 
         Args:
             line_group_id: LINE group ID
-            line_user_id: LINE user ID of the message sender
+            line_user_id: LINE user ID
 
         Returns:
-            True if reminder should be sent
+            True if notification should be sent
         """
         # Check if group is bound
         group_binding = await self.repository.get_group_binding_by_line_group_id(
@@ -453,35 +489,47 @@ class LineBindingService:
         if is_registered:
             return False
 
-        # Check group cooldown (30 minutes)
-        last_reminder = await self.repository.get_group_reminder_cooldown(line_group_id)
-        if last_reminder:
-            cooldown_end = last_reminder + timedelta(minutes=GROUP_REMINDER_COOLDOWN_MINUTES)
-            if datetime.utcnow().replace(tzinfo=last_reminder.tzinfo) < cooldown_end:
-                return False
+        # Check if user has been notified before
+        has_been_notified = await self.repository.has_user_been_notified(
+            line_group_id=line_group_id,
+            line_user_id=line_user_id
+        )
+        if has_been_notified:
+            return False
 
         return True
 
-    async def update_group_reminder_cooldown(self, line_group_id: str) -> None:
+    async def record_liff_notification(
+        self,
+        line_group_id: str,
+        line_user_id: str
+    ) -> None:
         """
-        Update the group reminder cooldown timestamp
+        Record that user has been notified in this group
 
         Args:
             line_group_id: LINE group ID
+            line_user_id: LINE user ID
         """
-        await self.repository.upsert_group_reminder_cooldown(line_group_id)
+        await self.repository.record_user_notification(
+            line_group_id=line_group_id,
+            line_user_id=line_user_id
+        )
 
-    async def is_user_registered_anywhere(self, line_user_id: str) -> bool:
+    async def is_group_bound(self, line_group_id: str) -> bool:
         """
-        Check if a LINE user has registered any game ID in any alliance
+        Check if a group is bound to an alliance
 
         Args:
-            line_user_id: LINE user ID
+            line_group_id: LINE group ID
 
         Returns:
-            True if user has at least one registration
+            True if group is bound
         """
-        return await self.repository.is_user_registered_anywhere(line_user_id)
+        group_binding = await self.repository.get_group_binding_by_line_group_id(
+            line_group_id
+        )
+        return group_binding is not None
 
     # =========================================================================
     # Performance Analytics Operations (LIFF)

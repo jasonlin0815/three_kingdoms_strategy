@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     line_channel_id: str | None = None
     line_channel_secret: str | None = None
     line_access_token: str | None = None
+    line_bot_user_id: str | None = None  # Bot's own user ID for @mention detection
     liff_id: str | None = None
 
     @property

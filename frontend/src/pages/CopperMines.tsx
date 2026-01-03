@@ -45,7 +45,7 @@ export function CopperMines() {
         {!isLoading && alliance && (
           <div className="space-y-6">
             {/* Rules Section (Alliance Level) */}
-            <CopperMineRulesCard allianceId={alliance.id} />
+            <CopperMineRulesCard />
 
             {/* Ownership List Section (Season Level) */}
             {activeSeason ? (

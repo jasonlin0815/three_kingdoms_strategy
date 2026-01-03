@@ -72,6 +72,11 @@ export interface CreateCopperMineOwnershipRequest {
   readonly applied_at?: string
 }
 
+export interface CopperMineOwnershipListResponse {
+  readonly ownerships: CopperMineOwnership[]
+  readonly total: number
+}
+
 // =============================================================================
 // Member Status Types (For Validation)
 // =============================================================================

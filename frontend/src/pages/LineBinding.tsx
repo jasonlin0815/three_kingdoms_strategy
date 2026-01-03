@@ -135,9 +135,17 @@ export function LineBinding() {
             {/* Bound Group Info */}
             <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 shrink-0">
-                  <MessageSquare className="h-6 w-6 text-green-600" />
-                </div>
+                {status.binding.group_picture_url ? (
+                  <img
+                    src={status.binding.group_picture_url}
+                    alt={status.binding.group_name || '群組'}
+                    className="h-12 w-12 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 shrink-0">
+                    <MessageSquare className="h-6 w-6 text-green-600" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-lg truncate">
                     {status.binding.group_name || '未命名群組'}

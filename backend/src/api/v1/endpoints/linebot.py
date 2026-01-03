@@ -4,16 +4,17 @@ LINE Bot API Endpoints
 Endpoints for LINE Bot integration:
 - Web App: Generate binding code, get status, unbind
 - LIFF: Get member info, register game ID
-- Webhook: Handle LINE events
+- Webhook: Handle LINE events (極簡設計)
 
-符合 CLAUDE.md 🔴:
-- API Layer only handles HTTP concerns
-- Business logic delegated to Service layer
-- Root routes defined as @router.get("") not "/"
+極簡 Bot 設計原則:
+1. Bot 只做「群組綁定」和「LIFF 入口推送」
+2. 所有功能都在 LIFF Web UI 完成
+3. 觸發條件：被 @ / 新成員加入 / 未註冊者首次發言
 """
 
 import json
 import logging
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -26,7 +27,7 @@ from src.core.dependencies import (
     PermissionServiceDep,
     UserIdDep,
 )
-from src.core.line_auth import WebhookBodyDep, create_liff_url, get_line_bot_api
+from src.core.line_auth import WebhookBodyDep, create_liff_url, get_group_info, get_line_bot_api
 from src.models.copper_mine import (
     CopperMineCreate,
     CopperMineListResponse,
@@ -35,6 +36,7 @@ from src.models.copper_mine import (
 from src.models.line_binding import (
     LineBindingCodeResponse,
     LineBindingStatusResponse,
+    LineGroupBindingResponse,
     LineWebhookEvent,
     LineWebhookRequest,
     MemberInfoResponse,
@@ -47,6 +49,9 @@ from src.services.line_binding_service import LineBindingService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/linebot", tags=["LINE Bot"])
+
+# 綁定碼格式：6 位英數字
+BIND_CODE_PATTERN = re.compile(r"^[A-Z0-9]{6}$")
 
 
 # =============================================================================
@@ -67,14 +72,7 @@ async def generate_binding_code(
     alliance_service: AllianceServiceDep,
     permission_service: PermissionServiceDep,
 ) -> LineBindingCodeResponse:
-    """
-    Generate a new binding code for the user's alliance
-
-    - Requires owner or admin role
-    - Code expires in 5 minutes
-    - Rate limited to 3 codes per hour
-    """
-    # Get user's alliance
+    """Generate a new binding code for the user's alliance"""
     alliance = await alliance_service.get_user_alliance(user_id)
     if not alliance:
         raise HTTPException(
@@ -82,7 +80,6 @@ async def generate_binding_code(
             detail="User has no alliance"
         )
 
-    # Check permission (owner or collaborator)
     await permission_service.require_owner_or_collaborator(
         user_id, alliance.id, "generate LINE binding code"
     )
@@ -104,15 +101,7 @@ async def get_binding_status(
     service: LineBindingServiceDep,
     alliance_service: AllianceServiceDep,
 ) -> LineBindingStatusResponse:
-    """
-    Get current LINE binding status
-
-    Returns:
-    - is_bound: Whether alliance has active LINE group binding
-    - binding: Group binding details (if bound)
-    - pending_code: Pending binding code (if not bound but code generated)
-    """
-    # Get user's alliance
+    """Get current LINE binding status"""
     alliance = await alliance_service.get_user_alliance(user_id)
     if not alliance:
         return LineBindingStatusResponse(
@@ -136,13 +125,7 @@ async def unbind_line_group(
     alliance_service: AllianceServiceDep,
     permission_service: PermissionServiceDep,
 ) -> Response:
-    """
-    Unbind LINE group from alliance
-
-    - Requires owner or admin role
-    - Member bindings are preserved
-    """
-    # Get user's alliance
+    """Unbind LINE group from alliance"""
     alliance = await alliance_service.get_user_alliance(user_id)
     if not alliance:
         raise HTTPException(
@@ -150,13 +133,39 @@ async def unbind_line_group(
             detail="User has no alliance"
         )
 
-    # Check permission
     await permission_service.require_owner_or_collaborator(
         user_id, alliance.id, "unbind LINE group"
     )
 
     await service.unbind_group(alliance.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/binding/refresh-info",
+    response_model=LineGroupBindingResponse,
+    summary="Refresh group info",
+    description="Refresh LINE group name and picture from LINE API"
+)
+async def refresh_group_info(
+    user_id: UserIdDep,
+    service: LineBindingServiceDep,
+    alliance_service: AllianceServiceDep,
+    permission_service: PermissionServiceDep,
+) -> LineGroupBindingResponse:
+    """Refresh LINE group name and picture from LINE API"""
+    alliance = await alliance_service.get_user_alliance(user_id)
+    if not alliance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User has no alliance"
+        )
+
+    await permission_service.require_owner_or_collaborator(
+        user_id, alliance.id, "refresh LINE group info"
+    )
+
+    return await service.refresh_group_info(alliance.id)
 
 
 # =============================================================================
@@ -175,13 +184,7 @@ async def get_member_info(
     u: Annotated[str, Query(description="LINE user ID")],
     g: Annotated[str, Query(description="LINE group ID")],
 ) -> MemberInfoResponse:
-    """
-    Get member info for LIFF page
-
-    Query params:
-    - u: LINE user ID
-    - g: LINE group ID
-    """
+    """Get member info for LIFF page"""
     return await service.get_member_info(
         line_user_id=u,
         line_group_id=g
@@ -200,14 +203,7 @@ async def get_member_performance(
     g: Annotated[str, Query(description="LINE group ID")],
     game_id: Annotated[str, Query(description="Game ID to get performance for")],
 ) -> MemberPerformanceResponse:
-    """
-    Get member performance analytics for LIFF page
-
-    Query params:
-    - u: LINE user ID
-    - g: LINE group ID
-    - game_id: Game ID to get performance for
-    """
+    """Get member performance analytics for LIFF page"""
     return await service.get_member_performance(
         line_group_id=g,
         line_user_id=u,
@@ -226,12 +222,7 @@ async def register_game_id(
     service: LineBindingServiceDep,
     data: MemberLineBindingCreate,
 ) -> RegisterMemberResponse:
-    """
-    Register a game ID for a LINE user
-
-    - Game ID is matched against members table for auto-verification
-    - Returns 409 if game ID already registered by another user
-    """
+    """Register a game ID for a LINE user"""
     return await service.register_member(
         line_group_id=data.line_group_id,
         line_user_id=data.line_user_id,
@@ -256,13 +247,7 @@ async def get_copper_mines(
     u: Annotated[str, Query(description="LINE user ID")],
     g: Annotated[str, Query(description="LINE group ID")],
 ) -> CopperMineListResponse:
-    """
-    Get copper mines list for LIFF page
-
-    Query params:
-    - u: LINE user ID
-    - g: LINE group ID
-    """
+    """Get copper mines list for LIFF page"""
     return await service.get_mines_list(
         line_group_id=g,
         line_user_id=u
@@ -280,12 +265,7 @@ async def register_copper_mine(
     service: CopperMineServiceDep,
     data: CopperMineCreate,
 ) -> RegisterCopperResponse:
-    """
-    Register a copper mine location
-
-    - Coordinates must be unique within alliance
-    - Returns 409 if mine already exists at coordinates
-    """
+    """Register a copper mine location"""
     return await service.register_mine(
         line_group_id=data.line_group_id,
         line_user_id=data.line_user_id,
@@ -309,13 +289,7 @@ async def delete_copper_mine(
     u: Annotated[str, Query(description="LINE user ID")],
     g: Annotated[str, Query(description="LINE group ID")],
 ) -> Response:
-    """
-    Delete a copper mine by ID
-
-    Query params:
-    - u: LINE user ID
-    - g: LINE group ID
-    """
+    """Delete a copper mine by ID"""
     from uuid import UUID
     await service.delete_mine(
         mine_id=UUID(mine_id),
@@ -326,7 +300,7 @@ async def delete_copper_mine(
 
 
 # =============================================================================
-# LINE Webhook Endpoint
+# LINE Webhook Endpoint (極簡設計)
 # =============================================================================
 
 
@@ -340,12 +314,7 @@ async def handle_webhook(
     service: LineBindingServiceDep,
     settings: Settings = Depends(get_settings),
 ) -> str:
-    """
-    Handle LINE webhook events
-
-    - Validates X-Line-Signature header
-    - Processes message events for bot commands
-    """
+    """Handle LINE webhook events"""
     try:
         data = json.loads(body.decode("utf-8"))
         webhook_request = LineWebhookRequest(**data)
@@ -364,160 +333,213 @@ async def _handle_event(
     service: LineBindingService,
     settings: Settings,
 ) -> None:
-    """Handle a single LINE event"""
+    """
+    極簡事件處理：
+    1. join: Bot 加入群組 → 發送綁定說明
+    2. memberJoined: 新成員加入 → 發送 LIFF 入口（每用戶一次）
+    3. message:
+       - /綁定 CODE → 執行綁定
+       - @bot → 發送 LIFF 入口
+       - 未註冊者首次發言 → 發送 LIFF 入口（每用戶一次）
+    4. follow: 用戶加好友 → 簡短說明
+    """
     source = event.source
     source_type = source.get("type")
+
+    # Bot 加入群組
+    if event.type == "join" and source_type == "group":
+        await _handle_join_event(event)
+        return
+
+    # 新成員加入群組
+    if event.type == "memberJoined" and source_type == "group":
+        await _handle_member_joined(event, service, settings)
+        return
+
+    # 用戶加好友
+    if event.type == "follow":
+        await _handle_follow_event(event)
+        return
+
+    # 訊息事件
+    if event.type == "message":
+        message = event.message or {}
+        if message.get("type") != "text":
+            return
+
+        # 私聊
+        if source_type == "user":
+            await _handle_private_message(event)
+            return
+
+        # 群組訊息
+        if source_type == "group":
+            await _handle_group_message(event, service, settings)
+            return
+
+
+# =============================================================================
+# Event Handlers
+# =============================================================================
+
+
+async def _handle_join_event(event: LineWebhookEvent) -> None:
+    """Bot 加入群組 → 發送綁定說明"""
+    reply_token = event.reply_token
+    if not reply_token:
+        return
+
+    await _reply_text(
+        reply_token,
+        "👋 我是三國小幫手！\n\n"
+        "📌 開始使用：\n"
+        "盟主請發送「/綁定 XXXXXX」完成綁定\n"
+        "（綁定碼請在 Web App 生成）"
+    )
+
+
+async def _handle_member_joined(
+    event: LineWebhookEvent,
+    service: LineBindingService,
+    settings: Settings,
+) -> None:
+    """新成員加入 → 發送 LIFF 入口（每用戶一次）"""
+    source = event.source
+    line_group_id = source.get("groupId")
     reply_token = event.reply_token
 
-    # Handle follow event (user adds bot as friend)
-    if event.type == "follow":
-        await _handle_follow_event(
-            event=event,
-            service=service,
-        )
+    if not line_group_id or not reply_token:
         return
 
-    # Only handle message events from here
-    if event.type != "message":
+    # 檢查群組是否已綁定
+    is_bound = await service.is_group_bound(line_group_id)
+    if not is_bound:
         return
 
+    if not settings.liff_id:
+        return
+
+    # 發送歡迎訊息
+    liff_url = create_liff_url(settings.liff_id, line_group_id)
+    await _send_liff_welcome(reply_token, liff_url)
+
+
+async def _handle_follow_event(event: LineWebhookEvent) -> None:
+    """用戶加好友 → 簡短說明"""
+    reply_token = event.reply_token
+    if not reply_token:
+        return
+
+    await _reply_text(
+        reply_token,
+        "👋 嗨！我主要在群組中使用。\n"
+        "請在已綁定的同盟群組中 @我 開始使用！"
+    )
+
+
+async def _handle_private_message(event: LineWebhookEvent) -> None:
+    """私聊 → 統一簡短回覆"""
+    reply_token = event.reply_token
+    if not reply_token:
+        return
+
+    await _reply_text(
+        reply_token,
+        "💡 請在同盟群組中 @我 使用功能～"
+    )
+
+
+async def _handle_group_message(
+    event: LineWebhookEvent,
+    service: LineBindingService,
+    settings: Settings,
+) -> None:
+    """
+    群組訊息處理：
+    1. /綁定 CODE → 執行綁定
+    2. @bot → 發送 LIFF 入口
+    3. 未註冊者首次發言 → 發送 LIFF 入口
+    """
+    source = event.source
     message = event.message or {}
-    if message.get("type") != "text":
-        return
-
-    # Handle private messages (1-on-1 chat)
-    if source_type == "user":
-        await _handle_private_message(
-            event=event,
-            service=service,
-        )
-        return
-
-    # Handle group messages
-    if source_type != "group":
-        return
-
     text = message.get("text", "").strip()
     line_group_id = source.get("groupId")
     line_user_id = source.get("userId")
+    reply_token = event.reply_token
 
     if not line_group_id or not line_user_id or not reply_token:
         return
 
-    # Handle commands
-    if text.startswith("/綁定 ") or text.startswith("/绑定 "):
-        code = text.split(" ", 1)[1].strip().upper()
-        await _handle_bind_command(
-            code=code,
+    # 1. 處理綁定指令
+    if _is_bind_command(text):
+        code = _extract_bind_code(text)
+        if code:
+            await _handle_bind_command(
+                code=code,
+                line_group_id=line_group_id,
+                line_user_id=line_user_id,
+                reply_token=reply_token,
+                service=service,
+                settings=settings,
+            )
+        return
+
+    # 2. 檢查是否被 @
+    mention = message.get("mention", {})
+    mentionees = mention.get("mentionees", [])
+    bot_user_id = settings.line_bot_user_id
+
+    if bot_user_id and _is_bot_mentioned(mentionees, bot_user_id):
+        await _send_liff_entry(
             line_group_id=line_group_id,
-            line_user_id=line_user_id,
             reply_token=reply_token,
-            service=service,
             settings=settings,
         )
-    elif text in ("/狀態", "/状态"):
-        await _handle_status_command(
-            line_group_id=line_group_id,
-            reply_token=reply_token,
-            service=service,
-        )
-    elif text in ("/幫助", "/帮助", "/help"):
-        await _handle_help_command(reply_token=reply_token)
-    else:
-        # Auto-reminder for unregistered users (non-command messages)
-        await _maybe_send_binding_reminder(
-            line_group_id=line_group_id,
-            line_user_id=line_user_id,
-            reply_token=reply_token,
-            service=service,
-            settings=settings,
-        )
-
-
-async def _handle_follow_event(
-    event: LineWebhookEvent,
-    service: LineBindingService,
-) -> None:
-    """Handle follow event - when user adds bot as friend"""
-    reply_token = event.reply_token
-    line_user_id = event.source.get("userId")
-
-    if not reply_token or not line_user_id:
         return
 
-    # Check if user is registered in any alliance
-    is_registered = await service.is_user_registered_anywhere(line_user_id)
-
-    if is_registered:
-        await _reply_text(
-            reply_token,
-            "歡迎回來！👋\n\n"
-            "您已是同盟成員，可在群組中查看數據或使用功能。"
-        )
-    else:
-        await _reply_text(
-            reply_token,
-            "歡迎使用【三國志戰略版】同盟管理 Bot！👋\n\n"
-            "本 Bot 專為 LINE 群組設計。\n\n"
-            "📌 使用方式：\n"
-            "1. 盟主在 Web App 建立同盟\n"
-            "2. 將本 Bot 加入同盟 LINE 群組\n"
-            "3. 在群組中發送「/綁定 <綁定碼>」\n\n"
-            "如您是盟友，請在群組中完成註冊！"
-        )
-
-
-async def _handle_private_message(
-    event: LineWebhookEvent,
-    service: LineBindingService,
-) -> None:
-    """Handle 1-on-1 private message"""
-    message = event.message or {}
-    text = message.get("text", "").strip()
-    reply_token = event.reply_token
-    line_user_id = event.source.get("userId")
-
-    if not reply_token or not line_user_id:
-        return
-
-    # Handle private help command
-    if text in ("/幫助", "/帮助", "/help"):
-        await _handle_private_help_command(reply_token)
-        return
-
-    # Default response based on registration status
-    is_registered = await service.is_user_registered_anywhere(line_user_id)
-
-    if is_registered:
-        await _reply_text(
-            reply_token,
-            "💡 此 Bot 主要在群組中使用。\n\n"
-            "請在已綁定的同盟群組中操作，\n"
-            "即可查看您的表現數據！"
-        )
-    else:
-        await _reply_text(
-            reply_token,
-            "👋 您好！\n\n"
-            "本 Bot 專為同盟 LINE 群組設計。\n"
-            "請在已綁定的群組中完成註冊後使用。\n\n"
-            "發送 /幫助 了解更多"
-        )
-
-
-async def _handle_private_help_command(reply_token: str) -> None:
-    """Handle /幫助 command in private chat"""
-    await _reply_text(
-        reply_token,
-        "📖 使用說明\n\n"
-        "本 Bot 專為同盟 LINE 群組設計。\n\n"
-        "📌 如何開始：\n"
-        "1. 盟主在 Web App 建立同盟\n"
-        "2. 將本 Bot 加入群組\n"
-        "3. 在群組發送「/綁定 <綁定碼>」\n"
-        "4. 盟友在群組中註冊遊戲 ID\n\n"
-        "💡 所有功能請在群組中使用"
+    # 3. 未註冊者首次發言 → 發送 LIFF 入口
+    should_notify = await service.should_send_liff_notification(
+        line_group_id=line_group_id,
+        line_user_id=line_user_id
     )
+
+    if should_notify:
+        # 先記錄，防止重複發送
+        await service.record_liff_notification(
+            line_group_id=line_group_id,
+            line_user_id=line_user_id
+        )
+        await _send_liff_first_message_reminder(
+            line_group_id=line_group_id,
+            reply_token=reply_token,
+            settings=settings,
+        )
+
+
+# =============================================================================
+# Command Handlers
+# =============================================================================
+
+
+def _is_bind_command(text: str) -> bool:
+    """檢查是否為綁定指令"""
+    return text.startswith("/綁定 ") or text.startswith("/绑定 ")
+
+
+def _extract_bind_code(text: str) -> str | None:
+    """從綁定指令中提取綁定碼"""
+    parts = text.split(" ", 1)
+    if len(parts) < 2:
+        return None
+    code = parts[1].strip().upper()
+    if BIND_CODE_PATTERN.match(code):
+        return code
+    return None
+
+
+def _is_bot_mentioned(mentionees: list, bot_user_id: str) -> bool:
+    """檢查 Bot 是否被 @"""
+    return any(m.get("userId") == bot_user_id for m in mentionees)
 
 
 async def _handle_bind_command(
@@ -528,243 +550,261 @@ async def _handle_bind_command(
     service: LineBindingService,
     settings: Settings,
 ) -> None:
-    """Handle /綁定 command - bind group and send welcome message with LIFF button"""
+    """處理 /綁定 指令"""
+    # 獲取群組資訊
+    group_info = get_group_info(line_group_id)
+
     success, message, alliance_id = await service.validate_and_bind_group(
         code=code,
         line_group_id=line_group_id,
         line_user_id=line_user_id,
+        group_name=group_info.name if group_info else None,
+        group_picture_url=group_info.picture_url if group_info else None,
     )
 
     if not success:
         await _reply_text(reply_token, f"❌ {message}")
         return
 
-    # Success: Send combined welcome message with LIFF button
+    # 綁定成功 → 發送歡迎訊息 + LIFF
     if not settings.liff_id:
         await _reply_text(
             reply_token,
             "✅ 綁定成功！\n\n"
-            "盟友們請註冊您的遊戲 ID，\n"
-            "讓盟主能更方便追蹤您的表現！"
+            "盟友們請註冊您的遊戲 ID～"
         )
+        return
+
+    liff_url = create_liff_url(settings.liff_id, line_group_id)
+    await _send_bind_success_message(reply_token, liff_url)
+
+
+# =============================================================================
+# Message Senders
+# =============================================================================
+
+
+async def _send_bind_success_message(reply_token: str, liff_url: str) -> None:
+    """發送綁定成功訊息（Flex Message）"""
+    line_bot = get_line_bot_api()
+    if not line_bot:
+        return
+
+    try:
+        from linebot.v3.messaging import (
+            FlexBox,
+            FlexBubble,
+            FlexButton,
+            FlexMessage,
+            FlexSeparator,
+            FlexText,
+            ReplyMessageRequest,
+            URIAction,
+        )
+
+        bubble = FlexBubble(
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(
+                        text="✅ 綁定成功！",
+                        weight="bold",
+                        size="xl",
+                        color="#1DB446",
+                    ),
+                    FlexSeparator(margin="lg"),
+                    FlexText(
+                        text="各位盟友，請點擊下方按鈕",
+                        size="md",
+                        margin="lg",
+                    ),
+                    FlexText(
+                        text="開始使用同盟管理功能！",
+                        size="md",
+                    ),
+                ],
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=URIAction(
+                            label="開始使用",
+                            uri=liff_url,
+                        ),
+                        style="primary",
+                        color="#1DB446",
+                    ),
+                ],
+            ),
+        )
+
+        line_bot.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[FlexMessage(
+                    alt_text="✅ 綁定成功！點擊開始使用",
+                    contents=bubble,
+                )],
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to send bind success message: {e}")
+
+
+async def _send_liff_entry(
+    line_group_id: str,
+    reply_token: str,
+    settings: Settings,
+) -> None:
+    """發送 LIFF 入口（被 @ 時）"""
+    if not settings.liff_id:
+        await _reply_text(reply_token, "💡 功能開發中～")
         return
 
     liff_url = create_liff_url(settings.liff_id, line_group_id)
     line_bot = get_line_bot_api()
 
-    if line_bot:
-        try:
-            from linebot.v3.messaging import (
-                FlexBox,
-                FlexBubble,
-                FlexButton,
-                FlexMessage,
-                FlexSeparator,
-                FlexText,
-                ReplyMessageRequest,
-                URIAction,
-            )
-
-            bubble = FlexBubble(
-                body=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexText(
-                            text="✅ 綁定成功！",
-                            weight="bold",
-                            size="xl",
-                            color="#1DB446",
-                        ),
-                        FlexSeparator(margin="lg"),
-                        FlexText(
-                            text="各位盟友，請點擊下方按鈕",
-                            size="md",
-                            margin="lg",
-                        ),
-                        FlexText(
-                            text="註冊您的遊戲 ID，",
-                            size="md",
-                        ),
-                        FlexText(
-                            text="讓盟主能更方便追蹤您的表現！",
-                            size="md",
-                        ),
-                    ],
-                ),
-                footer=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexButton(
-                            action=URIAction(
-                                label="開始註冊",
-                                uri=liff_url,
-                            ),
-                            style="primary",
-                            color="#1DB446",
-                        ),
-                    ],
-                ),
-            )
-
-            flex_message = FlexMessage(
-                alt_text="✅ 綁定成功！請點擊註冊遊戲 ID",
-                contents=bubble,
-            )
-
-            line_bot.reply_message(
-                ReplyMessageRequest(
-                    reply_token=reply_token,
-                    messages=[flex_message],
-                )
-            )
-            return
-        except Exception as e:
-            logger.error(f"Failed to send Flex Message: {e}")
-
-    # Fallback to text
-    await _reply_text(
-        reply_token,
-        f"✅ 綁定成功！\n\n"
-        f"各位盟友，請點擊以下連結註冊您的遊戲 ID：\n{liff_url}"
-    )
-
-
-async def _maybe_send_binding_reminder(
-    line_group_id: str,
-    line_user_id: str,
-    reply_token: str,
-    service: LineBindingService,
-    settings: Settings,
-) -> None:
-    """
-    Auto-send binding reminder if conditions are met:
-    1. Group is bound to alliance
-    2. User is NOT registered
-    3. Group hasn't received reminder in last 30 minutes
-    """
-    # Check if we should send reminder
-    should_send = await service.should_send_binding_reminder(
-        line_group_id=line_group_id,
-        line_user_id=line_user_id
-    )
-
-    if not should_send:
+    if not line_bot:
+        await _reply_text(reply_token, f"📱 點擊開始使用：\n{liff_url}")
         return
 
+    try:
+        from linebot.v3.messaging import (
+            FlexBox,
+            FlexBubble,
+            FlexButton,
+            FlexMessage,
+            FlexText,
+            ReplyMessageRequest,
+            URIAction,
+        )
+
+        bubble = FlexBubble(
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(
+                        text="📱 三國小幫手",
+                        weight="bold",
+                        size="lg",
+                    ),
+                    FlexText(
+                        text="查看表現、註冊帳號、管理銅礦",
+                        size="sm",
+                        color="#666666",
+                        margin="md",
+                    ),
+                ],
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=URIAction(
+                            label="開啟",
+                            uri=liff_url,
+                        ),
+                        style="primary",
+                    ),
+                ],
+            ),
+        )
+
+        line_bot.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[FlexMessage(
+                    alt_text="📱 點擊開始使用",
+                    contents=bubble,
+                )],
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to send LIFF entry: {e}")
+
+
+async def _send_liff_welcome(reply_token: str, liff_url: str) -> None:
+    """發送新成員歡迎訊息"""
+    line_bot = get_line_bot_api()
+    if not line_bot:
+        return
+
+    try:
+        from linebot.v3.messaging import (
+            FlexBox,
+            FlexBubble,
+            FlexButton,
+            FlexMessage,
+            FlexText,
+            ReplyMessageRequest,
+            URIAction,
+        )
+
+        bubble = FlexBubble(
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(
+                        text="👋 歡迎加入！",
+                        weight="bold",
+                        size="lg",
+                    ),
+                    FlexText(
+                        text="點擊下方按鈕開始使用～",
+                        size="sm",
+                        color="#666666",
+                        margin="md",
+                    ),
+                ],
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=URIAction(
+                            label="開始使用",
+                            uri=liff_url,
+                        ),
+                        style="primary",
+                    ),
+                ],
+            ),
+        )
+
+        line_bot.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[FlexMessage(
+                    alt_text="👋 歡迎加入！點擊開始使用",
+                    contents=bubble,
+                )],
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to send welcome message: {e}")
+
+
+async def _send_liff_first_message_reminder(
+    line_group_id: str,
+    reply_token: str,
+    settings: Settings,
+) -> None:
+    """發送首次發言提醒（輕量版）"""
     if not settings.liff_id:
         return
 
-    # Update cooldown BEFORE sending to prevent race conditions
-    await service.update_group_reminder_cooldown(line_group_id)
-
     liff_url = create_liff_url(settings.liff_id, line_group_id)
-    line_bot = get_line_bot_api()
 
-    if line_bot:
-        try:
-            from linebot.v3.messaging import (
-                FlexBox,
-                FlexBubble,
-                FlexButton,
-                FlexMessage,
-                FlexText,
-                ReplyMessageRequest,
-                URIAction,
-            )
-
-            bubble = FlexBubble(
-                body=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexText(
-                            text="📝 註冊遊戲 ID",
-                            weight="bold",
-                            size="lg",
-                        ),
-                        FlexText(
-                            text="尚未註冊的盟友，請點擊下方按鈕",
-                            size="sm",
-                            color="#666666",
-                            margin="md",
-                        ),
-                        FlexText(
-                            text="完成遊戲 ID 綁定！",
-                            size="sm",
-                            color="#666666",
-                        ),
-                    ],
-                ),
-                footer=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexButton(
-                            action=URIAction(
-                                label="開始註冊",
-                                uri=liff_url,
-                            ),
-                            style="primary",
-                        ),
-                    ],
-                ),
-            )
-
-            flex_message = FlexMessage(
-                alt_text="📝 請註冊遊戲 ID",
-                contents=bubble,
-            )
-
-            line_bot.reply_message(
-                ReplyMessageRequest(
-                    reply_token=reply_token,
-                    messages=[flex_message],
-                )
-            )
-            return
-        except Exception as e:
-            logger.error(f"Failed to send auto-reminder Flex Message: {e}")
-
-    # Fallback to text
+    # 使用簡短文字訊息，減少打擾感
     await _reply_text(
         reply_token,
-        f"📝 尚未註冊的盟友，請點擊以下連結完成遊戲 ID 綁定：\n{liff_url}"
+        f"💡 尚未註冊？點這裡開始 → {liff_url}"
     )
-
-
-async def _handle_status_command(
-    line_group_id: str,
-    reply_token: str,
-    service: LineBindingService,
-) -> None:
-    """Handle /狀態 command"""
-    status_info = await service.get_group_status(line_group_id)
-
-    if status_info:
-        reply_text = (
-            f"📊 群組綁定狀態\n\n"
-            f"已綁定同盟\n"
-            f"已註冊成員: {status_info['member_count']} 人\n"
-            f"綁定時間: {status_info['bound_at']}"
-        )
-    else:
-        reply_text = "❌ 此群組尚未綁定任何同盟"
-
-    await _reply_text(reply_token, reply_text)
-
-
-async def _handle_help_command(reply_token: str) -> None:
-    """Handle /幫助 command"""
-    reply_text = (
-        "📖 指令說明\n\n"
-        "/綁定 <綁定碼> - 綁定同盟（盟主用）\n"
-        "/狀態 - 查看綁定狀態\n"
-        "/幫助 - 顯示此說明\n\n"
-        "💡 盟友註冊遊戲 ID 會自動提醒"
-    )
-    await _reply_text(reply_token, reply_text)
 
 
 async def _reply_text(reply_token: str, text: str) -> None:
-    """Send text reply via LINE API"""
+    """發送文字回覆"""
     line_bot = get_line_bot_api()
     if not line_bot:
         logger.warning("LINE Bot API not available")
