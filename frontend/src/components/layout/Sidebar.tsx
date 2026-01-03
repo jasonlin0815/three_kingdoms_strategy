@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Calendar, Database, Trophy, Users, BarChart3, Settings, LogOut, Layers, Swords, MessageSquare } from 'lucide-react'
+import { Calendar, Database, Trophy, Users, BarChart3, Settings, LogOut, Layers, Swords, MessageSquare, Gem } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,11 @@ const navigation: readonly NavigationItem[] = [
     name: '霸業權重',
     href: '/hegemony',
     icon: Trophy,
+  },
+  {
+    name: '銅礦管理',
+    href: '/copper-mines',
+    icon: Gem,
   },
   {
     name: '同盟分析',

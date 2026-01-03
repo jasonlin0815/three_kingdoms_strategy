@@ -14,6 +14,7 @@ import { EventAnalytics } from './pages/EventAnalytics'
 import { EventDetail } from './pages/EventDetail'
 import { Settings } from './pages/Settings'
 import { LineBinding } from './pages/LineBinding'
+import { CopperMines } from './pages/CopperMines'
 import { LiffLayout } from './liff/components/LiffLayout'
 import { LiffHome } from './liff/pages/LiffHome'
 
@@ -57,6 +58,7 @@ function App() {
               <Route path="seasons" element={<Seasons />} />
               <Route path="data" element={<DataManagement />} />
               <Route path="hegemony" element={<HegemonyWeights />} />
+              <Route path="copper-mines" element={<CopperMines />} />
               <Route path="members" element={<MemberPerformance />} />
               <Route path="analytics" element={<AllianceAnalytics />} />
               <Route path="groups" element={<GroupAnalytics />} />
