@@ -46,6 +46,11 @@ export interface UpdateCopperMineRuleRequest {
 // =============================================================================
 
 /**
+ * Registration source for a copper mine
+ */
+export type RegisteredVia = 'liff' | 'dashboard'
+
+/**
  * Copper mine ownership record with joined member data
  */
 export interface CopperMineOwnership {
@@ -57,6 +62,8 @@ export interface CopperMineOwnership {
   readonly level: 9 | 10
   readonly applied_at: string
   readonly created_at: string
+  // P1 修復: 添加註冊來源
+  readonly registered_via: RegisteredVia
   // Joined fields from members table
   readonly member_name: string
   readonly member_group: string | null

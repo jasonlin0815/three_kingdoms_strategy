@@ -257,6 +257,19 @@ async def unregister_game_id(
 
 
 @router.get(
+    "/copper/rules",
+    summary="Get copper mine rules",
+    description="Get copper mine rules for LIFF display"
+)
+async def get_copper_rules(
+    service: CopperMineServiceDep,
+    g: Annotated[str, Query(description="LINE group ID")],
+) -> list:
+    """Get copper mine rules for LIFF page"""
+    return await service.get_rules_for_liff(line_group_id=g)
+
+
+@router.get(
     "/copper/list",
     response_model=CopperMineListResponse,
     summary="Get copper mines list",

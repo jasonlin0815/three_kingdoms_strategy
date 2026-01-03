@@ -114,6 +114,8 @@ class CopperMineOwnershipResponse(BaseModel):
     level: int
     applied_at: datetime
     created_at: datetime
+    # P1 修復: 添加註冊來源欄位
+    registered_via: Literal["liff", "dashboard"] = "dashboard"
     # Joined fields
     member_name: str
     member_group: str | None = None

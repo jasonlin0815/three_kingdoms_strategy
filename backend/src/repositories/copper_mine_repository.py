@@ -10,7 +10,7 @@ Supports both LIFF registration and Dashboard ownership management.
 - No business logic (belongs in Service layer)
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -172,7 +172,7 @@ class CopperMineRepository(SupabaseRepository[CopperMine]):
             .from_("copper_mines")
             .update({
                 "status": status,
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.now(UTC).isoformat()
             })
             .eq("id", str(mine_id))
             .execute()

@@ -249,6 +249,7 @@ export function useCreateCopperMineOwnership() {
         ...data,
         applied_at: data.applied_at || new Date().toISOString(),
         created_at: new Date().toISOString(),
+        registered_via: 'dashboard',
         member_name: '載入中...',
         member_group: null,
         line_display_name: null,

@@ -70,8 +70,10 @@ export async function registerMember(
     gameId: string
   }
 ): Promise<RegisterMemberResponse> {
-  return liffFetch<RegisterMemberResponse>('/linebot/member/register', options, {
+  // P1 修復: POST body 已包含 userId/groupId，不需要 query params
+  const response = await fetch(`${API_BASE_URL}/api/v1/linebot/member/register`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       groupId: options.lineGroupId,
       userId: options.lineUserId,
@@ -79,6 +81,13 @@ export async function registerMember(
       gameId: options.gameId,
     }),
   })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(error.detail || 'Register failed')
+  }
+
+  return response.json()
 }
 
 export async function unregisterMember(
@@ -126,6 +135,30 @@ export interface RegisterCopperResponse {
   message: string | null
 }
 
+export interface CopperMineRule {
+  tier: number
+  required_merit: number
+  allowed_level: 'nine' | 'ten' | 'both'
+}
+
+export async function getCopperRules(
+  options: Pick<LiffApiOptions, 'lineGroupId'>
+): Promise<CopperMineRule[]> {
+  const url = new URL(`${API_BASE_URL}/api/v1/linebot/copper/rules`)
+  url.searchParams.set('g', options.lineGroupId)
+
+  const response = await fetch(url.toString(), {
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(error.detail || 'Request failed')
+  }
+
+  return response.json()
+}
+
 export async function getCopperMines(options: LiffApiOptions): Promise<CopperMineListResponse> {
   return liffFetch<CopperMineListResponse>('/linebot/copper/list', options)
 }
@@ -139,8 +172,10 @@ export async function registerCopperMine(
     notes?: string
   }
 ): Promise<RegisterCopperResponse> {
-  return liffFetch<RegisterCopperResponse>('/linebot/copper/register', options, {
+  // P1 修復: POST body 已包含 userId/groupId，不需要 query params
+  const response = await fetch(`${API_BASE_URL}/api/v1/linebot/copper/register`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       groupId: options.lineGroupId,
       userId: options.lineUserId,
@@ -151,6 +186,13 @@ export async function registerCopperMine(
       notes: options.notes,
     }),
   })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(error.detail || 'Register failed')
+  }
+
+  return response.json()
 }
 
 export async function deleteCopperMine(

@@ -1,12 +1,14 @@
 /**
  * CopperMineFormDialog - Dialog for adding new copper mine ownership
  *
- * 修復 P0 問題：使用 Select 組件選擇成員，傳入正確的 member_id (UUID)
+ * P0 修復: 使用 Select 組件選擇成員，傳入正確的 member_id (UUID)
+ * P1 修復: 添加規則驗證錯誤顯示
  */
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
   DialogContent,
@@ -54,6 +56,7 @@ export function CopperMineFormDialog({
 }: CopperMineFormDialogProps) {
   const createMutation = useCreateCopperMineOwnership()
   const { data: members, isLoading: isLoadingMembers } = useAnalyticsMembers(seasonId, true)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const {
     register,
@@ -81,9 +84,10 @@ export function CopperMineFormDialog({
     return [...members].sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
   }, [members])
 
-  // Reset form when dialog opens
+  // Reset form and error when dialog opens
   useEffect(() => {
     if (open) {
+      setSubmitError(null)
       reset({
         member_id: '',
         coord_x: '',
@@ -97,18 +101,25 @@ export function CopperMineFormDialog({
   async function onSubmit(data: FormData) {
     if (!data.member_id) return
 
-    await createMutation.mutateAsync({
-      seasonId,
-      data: {
-        member_id: data.member_id,
-        coord_x: parseInt(data.coord_x, 10),
-        coord_y: parseInt(data.coord_y, 10),
-        level: parseInt(data.level, 10) as 9 | 10,
-        applied_at: data.applied_at,
-      },
-    })
+    setSubmitError(null)
 
-    onOpenChange(false)
+    try {
+      await createMutation.mutateAsync({
+        seasonId,
+        data: {
+          member_id: data.member_id,
+          coord_x: parseInt(data.coord_x, 10),
+          coord_y: parseInt(data.coord_y, 10),
+          level: parseInt(data.level, 10) as 9 | 10,
+          applied_at: data.applied_at,
+        },
+      })
+      onOpenChange(false)
+    } catch (error) {
+      // P1 修復: 顯示後端返回的規則驗證錯誤
+      const message = error instanceof Error ? error.message : '新增失敗'
+      setSubmitError(message)
+    }
   }
 
   const isLoading = createMutation.isPending
@@ -122,6 +133,14 @@ export function CopperMineFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* P1 修復: 顯示規則驗證錯誤 */}
+          {submitError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Member Selection - 使用 Select 組件選擇成員 */}
           <div className="space-y-2">
             <Label htmlFor="member_id">成員</Label>
