@@ -73,18 +73,36 @@ class CopperMineRepository(SupabaseRepository[CopperMine]):
         self,
         alliance_id: UUID,
         coord_x: int,
-        coord_y: int
+        coord_y: int,
+        season_id: UUID | None = None
     ) -> CopperMine | None:
-        """Check if a mine exists at given coordinates"""
-        result = await self._execute_async(
-            lambda: self.client
+        """
+        Check if a mine exists at given coordinates.
+
+        Args:
+            alliance_id: Alliance UUID
+            coord_x: X coordinate
+            coord_y: Y coordinate
+            season_id: Optional season UUID. If provided, only checks within that season.
+                       If None, checks across all mines in the alliance.
+
+        Returns:
+            CopperMine if exists, None otherwise
+        """
+        query = (
+            self.client
             .from_("copper_mines")
             .select("*")
             .eq("alliance_id", str(alliance_id))
             .eq("coord_x", coord_x)
             .eq("coord_y", coord_y)
-            .execute()
         )
+
+        # If season_id is provided, only check within that season
+        if season_id:
+            query = query.eq("season_id", str(season_id))
+
+        result = await self._execute_async(lambda: query.execute())
 
         data = self._handle_supabase_result(result, allow_empty=True, expect_single=True)
         if not data:

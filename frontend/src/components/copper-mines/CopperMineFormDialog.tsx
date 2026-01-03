@@ -1,8 +1,10 @@
 /**
  * CopperMineFormDialog - Dialog for adding new copper mine ownership
+ *
+ * 修復 P0 問題：使用 Select 組件選擇成員，傳入正確的 member_id (UUID)
  */
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { Loader2 } from 'lucide-react'
 import {
@@ -24,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useCreateCopperMineOwnership } from '@/hooks/use-copper-mines'
+import { useAnalyticsMembers } from '@/hooks/use-analytics'
 
 interface FormData {
   member_id: string
@@ -50,6 +53,7 @@ export function CopperMineFormDialog({
   seasonId,
 }: CopperMineFormDialogProps) {
   const createMutation = useCreateCopperMineOwnership()
+  const { data: members, isLoading: isLoadingMembers } = useAnalyticsMembers(seasonId, true)
 
   const {
     register,
@@ -69,6 +73,13 @@ export function CopperMineFormDialog({
   })
 
   const level = watch('level')
+  const memberId = watch('member_id')
+
+  // Sort members by name for better UX
+  const sortedMembers = useMemo(() => {
+    if (!members) return []
+    return [...members].sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
+  }, [members])
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -84,10 +95,12 @@ export function CopperMineFormDialog({
   }, [open, reset])
 
   async function onSubmit(data: FormData) {
+    if (!data.member_id) return
+
     await createMutation.mutateAsync({
       seasonId,
       data: {
-        member_id: data.member_id || 'mock-member',
+        member_id: data.member_id,
         coord_x: parseInt(data.coord_x, 10),
         coord_y: parseInt(data.coord_y, 10),
         level: parseInt(data.level, 10) as 9 | 10,
@@ -105,22 +118,41 @@ export function CopperMineFormDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>新增銅礦記錄</DialogTitle>
-          <DialogDescription>
-            登記成員的銅礦擁有資訊
-          </DialogDescription>
+          <DialogDescription>登記成員的銅礦擁有資訊</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Member Selection */}
+          {/* Member Selection - 使用 Select 組件選擇成員 */}
           <div className="space-y-2">
-            <Label htmlFor="member_id">成員（遊戲 ID）</Label>
-            <Input
-              id="member_id"
-              placeholder="輸入成員遊戲 ID"
-              {...register('member_id', {
-                required: '請選擇成員',
-              })}
-            />
+            <Label htmlFor="member_id">成員</Label>
+            {isLoadingMembers ? (
+              <div className="flex items-center gap-2 h-10 px-3 border rounded-md text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                載入成員列表...
+              </div>
+            ) : (
+              <Select
+                value={memberId}
+                onValueChange={(value) => setValue('member_id', value)}
+              >
+                <SelectTrigger id="member_id">
+                  <SelectValue placeholder="選擇成員" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {sortedMembers.length === 0 ? (
+                    <div className="py-2 px-3 text-sm text-muted-foreground">
+                      無可用成員
+                    </div>
+                  ) : (
+                    sortedMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            )}
             {errors.member_id && (
               <p className="text-sm text-destructive">{errors.member_id.message}</p>
             )}
@@ -201,7 +233,7 @@ export function CopperMineFormDialog({
             >
               取消
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading || !memberId}>
               {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               新增
             </Button>

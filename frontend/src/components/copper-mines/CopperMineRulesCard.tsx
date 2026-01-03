@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { Plus, Trash2, Loader2, Settings2, Check, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, Check, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -157,13 +157,8 @@ export function CopperMineRulesCard() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Settings2 className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <CardTitle className="text-lg">銅礦管理規則</CardTitle>
-            <CardDescription>設定銅礦申請的戰功門檻與可申請等級</CardDescription>
-          </div>
-        </div>
+        <CardTitle className="text-lg">銅礦管理規則</CardTitle>
+        <CardDescription>設定銅礦申請的戰功門檻與可申請等級</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (

@@ -6,7 +6,7 @@
  */
 
 import { useState, useMemo } from 'react'
-import { Plus, Trash2, Loader2, Map, Filter } from 'lucide-react'
+import { Plus, Trash2, Loader2, Filter } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -103,14 +103,11 @@ export function CopperMineListCard({ seasonId, seasonName }: CopperMineListCardP
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Map className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <CardTitle className="text-lg">銅礦擁有列表</CardTitle>
-                <CardDescription>
-                  {seasonName} - 共 {ownerships?.length ?? 0} 座銅礦
-                </CardDescription>
-              </div>
+            <div>
+              <CardTitle className="text-lg">銅礦擁有列表</CardTitle>
+              <CardDescription>
+                {seasonName} - 共 {ownerships?.length ?? 0} 座銅礦
+              </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               {/* Group Filter */}

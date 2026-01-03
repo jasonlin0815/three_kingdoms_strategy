@@ -225,3 +225,42 @@ class MemberSnapshotRepository(SupabaseRepository[MemberSnapshot]):
         self._handle_supabase_result(result, allow_empty=True)
 
         return True
+
+    async def get_latest_by_member_in_season(
+        self, member_id: UUID, season_id: UUID
+    ) -> MemberSnapshot | None:
+        """
+        Get the latest snapshot for a member in a specific season.
+
+        P1 修復: 用於銅礦規則驗證 - 取得成員的最新 total_merit
+
+        Args:
+            member_id: Member UUID
+            season_id: Season UUID
+
+        Returns:
+            Latest member snapshot in the season or None if not found
+
+        符合 CLAUDE.md 🔴: Uses _handle_supabase_result()
+        """
+        # Join with csv_uploads to filter by season_id
+        result = await self._execute_async(
+            lambda: self.client.from_(self.table_name)
+            .select("*, csv_uploads!inner(season_id)")
+            .eq("member_id", str(member_id))
+            .eq("csv_uploads.season_id", str(season_id))
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True, expect_single=True)
+
+        if not data:
+            return None
+
+        # Remove the joined csv_uploads data before building model
+        if isinstance(data, dict) and "csv_uploads" in data:
+            del data["csv_uploads"]
+
+        return self._build_model(data)
