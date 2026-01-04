@@ -1,6 +1,6 @@
-import { type ComponentType } from 'react'
+import { useState, type ComponentType } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Calendar, Database, Trophy, Users, BarChart3, Settings, LogOut, Layers, Swords, MessageSquare, Gem } from 'lucide-react'
+import { Calendar, Database, Trophy, Users, User, BarChart3, Settings, LogOut, Swords, MessageSquare, Gem, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,19 @@ interface NavigationItem {
   readonly icon: ComponentType<{ className?: string }>
 }
 
-const navigation: readonly NavigationItem[] = [
+interface NavigationGroup {
+  readonly name: string
+  readonly icon: ComponentType<{ className?: string }>
+  readonly children: readonly NavigationItem[]
+}
+
+type NavigationEntry = NavigationItem | NavigationGroup
+
+function isNavigationGroup(entry: NavigationEntry): entry is NavigationGroup {
+  return 'children' in entry
+}
+
+const navigation: readonly NavigationEntry[] = [
   {
     name: '賽季管理',
     href: '/seasons',
@@ -37,24 +49,30 @@ const navigation: readonly NavigationItem[] = [
     icon: Gem,
   },
   {
-    name: '同盟分析',
-    href: '/analytics',
-    icon: BarChart3,
-  },
-  {
-    name: '組別分析',
-    href: '/groups',
-    icon: Layers,
-  },
-  {
-    name: '事件分析',
+    name: '事件戰役',
     href: '/events',
     icon: Swords,
   },
   {
-    name: '成員表現',
-    href: '/members',
-    icon: Users,
+    name: '數據分析',
+    icon: BarChart3,
+    children: [
+      {
+        name: '同盟分析',
+        href: '/analytics',
+        icon: BarChart3,
+      },
+      {
+        name: '組別分析',
+        href: '/groups',
+        icon: Users,
+      },
+      {
+        name: '成員分析',
+        href: '/members',
+        icon: User,
+      },
+    ],
   },
   {
     name: 'LINE 三國小幫手',
@@ -72,9 +90,23 @@ export function Sidebar({ className }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    '數據分析': true, // 預設展開
+  })
 
   const isActive = (href: string) => {
     return location.pathname.startsWith(href)
+  }
+
+  const isGroupActive = (group: NavigationGroup) => {
+    return group.children.some((child) => isActive(child.href))
+  }
+
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }))
   }
 
   const handleSignOut = async () => {
@@ -105,14 +137,76 @@ export function Sidebar({ className }: SidebarProps) {
 
       {/* Navigation Links */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => {
-          const Icon = item.icon
-          const active = isActive(item.href)
+        {navigation.map((entry) => {
+          if (isNavigationGroup(entry)) {
+            const Icon = entry.icon
+            const isExpanded = expandedGroups[entry.name] ?? false
+            const groupActive = isGroupActive(entry)
+
+            return (
+              <div key={entry.name}>
+                {/* Group Header */}
+                <button
+                  onClick={() => toggleGroup(entry.name)}
+                  className={cn(
+                    'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                    groupActive
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 text-left">{entry.name}</span>
+                  <ChevronDown
+                    className={cn(
+                      'h-4 w-4 shrink-0 transition-transform duration-200',
+                      isExpanded ? 'rotate-0' : '-rotate-90'
+                    )}
+                  />
+                </button>
+
+                {/* Group Children */}
+                <div
+                  className={cn(
+                    'overflow-hidden transition-all duration-200',
+                    isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                  )}
+                >
+                  <div className="ml-4 mt-1 space-y-1 border-l border-border pl-3">
+                    {entry.children.map((child) => {
+                      const ChildIcon = child.icon
+                      const active = isActive(child.href)
+
+                      return (
+                        <Link
+                          key={child.href}
+                          to={child.href}
+                          className={cn(
+                            'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                            active
+                              ? 'bg-primary text-primary-foreground shadow-sm'
+                              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                          )}
+                        >
+                          <ChildIcon className="h-4 w-4 shrink-0" />
+                          <span>{child.name}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          // Regular navigation item
+          const Icon = entry.icon
+          const active = isActive(entry.href)
 
           return (
             <Link
-              key={item.href}
-              to={item.href}
+              key={entry.href}
+              to={entry.href}
               className={cn(
                 'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                 active
@@ -121,7 +215,7 @@ export function Sidebar({ className }: SidebarProps) {
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span>{item.name}</span>
+              <span>{entry.name}</span>
             </Link>
           )
         })}
