@@ -26,6 +26,7 @@ import {
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
 import { DetailedStripPlot } from '@/components/analytics/BoxPlot'
+import { ViewModeToggle, type ViewMode } from '@/components/analytics/ViewModeToggle'
 import {
   TrendingUp,
   TrendingDown,
@@ -80,13 +81,6 @@ import type {
   GroupComparisonItem,
   AllianceAveragesResponse,
 } from '@/types/analytics'
-
-// ============================================================================
-// Types
-// ============================================================================
-
-/** View mode for data display: latest period or season-to-date */
-type ViewMode = 'latest' | 'season'
 
 // ============================================================================
 // Tab 1: Overview
@@ -921,13 +915,7 @@ function GroupAnalytics() {
             <h2 className="text-2xl font-bold tracking-tight">組別分析</h2>
             <p className="text-muted-foreground mt-1">查看各組別的人日均表現與統計數據</p>
           </div>
-          {/* View Mode Toggle */}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-            <TabsList className="h-8">
-              <TabsTrigger value="latest" className="text-xs px-3">最新一期</TabsTrigger>
-              <TabsTrigger value="season" className="text-xs px-3">賽季以來</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
         </div>
 
         {/* Group Selector */}

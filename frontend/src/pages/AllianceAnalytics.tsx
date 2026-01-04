@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
 import { BoxPlotComparison } from '@/components/analytics/BoxPlot'
+import { ViewModeToggle, type ViewMode } from '@/components/analytics/ViewModeToggle'
 import { useSeasons } from '@/hooks/use-seasons'
 import { useAllianceAnalytics } from '@/hooks/use-analytics'
 import type {
@@ -69,12 +70,6 @@ import {
   formatDateLabel,
 } from '@/lib/chart-utils'
 import { allianceChartConfigs } from '@/lib/chart-configs'
-
-// ============================================================================
-// Types
-// ============================================================================
-
-type ViewMode = 'latest' | 'season'
 
 // ============================================================================
 // Helper Components
@@ -919,13 +914,7 @@ function AllianceAnalytics() {
             </p>
           </div>
 
-          {/* View Mode Toggle */}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-            <TabsList className="h-8">
-              <TabsTrigger value="latest" className="text-xs px-3">最新一期</TabsTrigger>
-              <TabsTrigger value="season" className="text-xs px-3">賽季以來</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
         </div>
 
         {/* Loading State */}

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
+import { ViewModeToggle, type ViewMode } from '@/components/analytics/ViewModeToggle'
 import {
   TrendingUp,
   TrendingDown,
@@ -115,8 +116,6 @@ interface AllianceMedian {
   readonly daily_donation: number
   readonly power: number
 }
-
-type ViewMode = 'latest' | 'season'
 
 // ============================================================================
 // Helpers
@@ -251,12 +250,7 @@ function OverviewTab({ periodData, seasonSummary, allianceAvg, allianceMedian, m
     <div className="space-y-6">
       {/* View Mode Toggle */}
       <div className="flex items-center justify-end">
-        <Tabs value={viewMode} onValueChange={(v) => onViewModeChange(v as ViewMode)} className="w-auto">
-          <TabsList className="h-8">
-            <TabsTrigger value="latest" className="text-xs px-3">最新一期</TabsTrigger>
-            <TabsTrigger value="season" className="text-xs px-3">賽季以來</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <ViewModeToggle value={viewMode} onChange={onViewModeChange} className="w-auto" />
       </div>
 
       {/* Current Status Cards */}
