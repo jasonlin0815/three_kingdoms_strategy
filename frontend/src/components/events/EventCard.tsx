@@ -3,23 +3,28 @@
  *
  * Single-row event display with expandable quick preview.
  * Follows the same pattern as SeasonCard for UI consistency.
+ *
+ * Design rationale:
+ * - Collapsed: Show key metrics for quick scanning (duration, participation, absent count)
+ * - Expanded: 3 KPI cards + stats row with MVP + compact box plot for merit distribution
  */
 
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { ChevronRight, CheckCircle, XCircle, UserPlus } from 'lucide-react'
-import { Bar, BarChart, XAxis, YAxis, CartesianGrid } from 'recharts'
-import { ChartContainer, ChartConfig, ChartTooltip } from '@/components/ui/chart'
-import { formatNumber, formatNumberCompact } from '@/lib/chart-utils'
+import { ChevronRight, CheckCircle, XCircle, UserPlus, Users, Swords, Clock, Trophy } from 'lucide-react'
+import { formatNumberCompact, formatNumber, calculateBoxPlotStats } from '@/lib/chart-utils'
+import { BoxPlot } from '@/components/analytics/BoxPlot'
 import {
   getEventIcon,
   formatEventTime,
   getEventTypeBadgeVariant,
   getEventTypeLabel,
+  formatDuration,
+  formatTimeRange,
 } from '@/lib/event-utils'
 import type { EventListItem, EventSummary, EventMemberMetric } from '@/types/event'
 import type { DistributionBin } from '@/types/analytics'
@@ -38,14 +43,6 @@ interface EventCardProps {
 }
 
 // ============================================================================
-// Chart Config
-// ============================================================================
-
-const distributionConfig = {
-  count: { label: '人數', color: 'var(--primary)' },
-} satisfies ChartConfig
-
-// ============================================================================
 // KPI Mini Card
 // ============================================================================
 
@@ -53,17 +50,75 @@ interface KpiMiniCardProps {
   readonly title: string
   readonly value: string | number
   readonly subtitle?: string
+  readonly icon?: React.ReactNode
 }
 
-function KpiMiniCard({ title, value, subtitle }: KpiMiniCardProps) {
+function KpiMiniCard({ title, value, subtitle, icon }: KpiMiniCardProps) {
   return (
     <Card>
       <CardContent className="py-3 px-4">
-        <p className="text-xs text-muted-foreground">{title}</p>
-        <p className="text-lg font-bold tabular-nums mt-0.5">{value}</p>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">{title}</p>
+            <p className="text-lg font-bold tabular-nums mt-0.5">{value}</p>
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+          {icon && <div className="text-muted-foreground">{icon}</div>}
+        </div>
       </CardContent>
     </Card>
+  )
+}
+
+// ============================================================================
+// Inline Stats (for collapsed state)
+// ============================================================================
+
+interface InlineStatsProps {
+  readonly event: EventListItem
+}
+
+function InlineStats({ event }: InlineStatsProps) {
+  const duration = formatDuration(event.event_start, event.event_end)
+  const timeDisplay = formatEventTime(event.event_start, event.event_end)
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+      {/* Time range */}
+      <span>{timeDisplay}</span>
+
+      {/* Duration */}
+      {duration && (
+        <span className="flex items-center gap-1">
+          <Clock className="h-3.5 w-3.5" />
+          {duration}
+        </span>
+      )}
+
+      {/* Participation rate */}
+      {event.participation_rate != null && (
+        <span className="flex items-center gap-1">
+          <Users className="h-3.5 w-3.5" />
+          {event.participation_rate}%
+        </span>
+      )}
+
+      {/* Total merit */}
+      {event.total_merit != null && (
+        <span className="flex items-center gap-1">
+          <Swords className="h-3.5 w-3.5" />
+          {formatNumberCompact(event.total_merit)}
+        </span>
+      )}
+
+      {/* Absent count - highlighted if > 0 */}
+      {event.absent_count != null && event.absent_count > 0 && (
+        <span className="flex items-center gap-1 text-destructive font-medium">
+          <XCircle className="h-3.5 w-3.5" />
+          {event.absent_count} 人缺席
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -72,44 +127,52 @@ function KpiMiniCard({ title, value, subtitle }: KpiMiniCardProps) {
 // ============================================================================
 
 interface ExpandedContentProps {
-  readonly eventId: string
+  readonly event: EventListItem
   readonly eventDetail: {
     summary: EventSummary
-    merit_distribution: readonly DistributionBin[]
+    metrics: readonly EventMemberMetric[]
   }
 }
 
-function ExpandedContent({ eventId, eventDetail }: ExpandedContentProps) {
+function ExpandedContent({ event, eventDetail }: ExpandedContentProps) {
   const navigate = useNavigate()
-  const { summary, merit_distribution } = eventDetail
+  const { summary, metrics } = eventDetail
+  const duration = formatDuration(event.event_start, event.event_end)
+  const timeRange = formatTimeRange(event.event_start, event.event_end)
+
+  // Calculate box plot stats from participated members' merit_diff
+  const meritStats = useMemo(() => {
+    const participatedValues = metrics
+      .filter((m) => m.merit_diff > 0)
+      .map((m) => m.merit_diff)
+    return calculateBoxPlotStats(participatedValues)
+  }, [metrics])
 
   return (
     <div className="space-y-4">
-      {/* KPI Grid */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+      {/* KPI Grid - 3 cards: Participation, Total Merit, Duration */}
+      <div className="grid gap-3 grid-cols-3">
         <KpiMiniCard
           title="參與率"
           value={`${summary.participation_rate}%`}
           subtitle={`${summary.participated_count}/${summary.total_members - summary.new_member_count} 人`}
+          icon={<Users className="h-4 w-4" />}
         />
         <KpiMiniCard
           title="總戰功"
           value={formatNumberCompact(summary.total_merit)}
+          icon={<Swords className="h-4 w-4" />}
         />
         <KpiMiniCard
-          title="MVP"
-          value={summary.mvp_member_name ?? '-'}
-          subtitle={summary.mvp_merit != null ? `${formatNumber(summary.mvp_merit)} 戰功` : undefined}
-        />
-        <KpiMiniCard
-          title="平均戰功"
-          value={formatNumber(summary.avg_merit)}
-          subtitle={`${summary.participated_count} 位參與`}
+          title="持續時間"
+          value={duration ?? '-'}
+          subtitle={timeRange ?? undefined}
+          icon={<Clock className="h-4 w-4" />}
         />
       </div>
 
-      {/* Participation Stats */}
-      <div className="flex items-center gap-4 text-sm">
+      {/* Stats Row: Participation + Absent + New Members + MVP */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <div className="flex items-center gap-1.5">
           <CheckCircle className="h-4 w-4 text-primary" />
           <span>參與 {summary.participated_count} 人</span>
@@ -124,32 +187,23 @@ function ExpandedContent({ eventId, eventDetail }: ExpandedContentProps) {
             <span>新成員 {summary.new_member_count} 人</span>
           </div>
         )}
+        {/* MVP inline instead of separate card */}
+        {summary.mvp_member_name && (
+          <div className="flex items-center gap-1.5 ml-auto">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            <span className="font-medium">{summary.mvp_member_name}</span>
+            {summary.mvp_merit != null && (
+              <span className="text-muted-foreground">({formatNumber(summary.mvp_merit)})</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Merit Distribution Chart */}
-      {merit_distribution.length > 0 && (
-        <div>
-          <p className="text-sm font-medium mb-2">戰功分佈</p>
-          <ChartContainer config={distributionConfig} className="h-[120px] w-full">
-            <BarChart data={[...merit_distribution]} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
-              <XAxis dataKey="range" tickLine={false} axisLine={false} className="text-xs" tick={{ fontSize: 10 }} />
-              <YAxis tickLine={false} axisLine={false} className="text-xs" width={25} tick={{ fontSize: 10 }} />
-              <ChartTooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null
-                  const d = payload[0].payload as DistributionBin
-                  return (
-                    <div className="rounded-lg border bg-background p-2 shadow-sm">
-                      <div className="font-medium text-sm">戰功 {d.range}</div>
-                      <div className="text-xs">{d.count} 人</div>
-                    </div>
-                  )
-                }}
-              />
-              <Bar dataKey="count" fill="var(--primary)" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ChartContainer>
+      {/* Compact Box Plot for merit distribution */}
+      {meritStats && (
+        <div className="pt-2">
+          <p className="text-xs text-muted-foreground mb-2">戰功分佈</p>
+          <BoxPlot stats={meritStats} showLabels={true} />
         </div>
       )}
 
@@ -160,7 +214,7 @@ function ExpandedContent({ eventId, eventDetail }: ExpandedContentProps) {
           size="sm"
           onClick={(e) => {
             e.stopPropagation()
-            navigate(`/events/${eventId}`)
+            navigate(`/events/${event.id}`)
           }}
         >
           查看完整分析
@@ -183,14 +237,6 @@ export function EventCard({ event, eventDetail }: EventCardProps) {
   const handleViewDetail = useCallback(() => {
     navigate(`/events/${event.id}`)
   }, [event.id, navigate])
-
-  // Build inline description with key metrics
-  const inlineStats = [
-    formatEventTime(event.event_start, event.event_end),
-    event.participation_rate != null ? `參與 ${event.participation_rate}%` : null,
-    event.total_merit != null ? `戰功 ${formatNumberCompact(event.total_merit)}` : null,
-    event.mvp_name ? `MVP ${event.mvp_name}` : null,
-  ].filter(Boolean).join(' · ')
 
   const icon = <Icon className="h-4 w-4" />
 
@@ -215,22 +261,25 @@ export function EventCard({ event, eventDetail }: EventCardProps) {
     </Button>
   )
 
+  // Use InlineStats component for collapsed description
+  const description = <InlineStats event={event} />
+
   return (
     <CollapsibleCard
       icon={icon}
       title={event.name}
       badge={badge}
-      description={inlineStats}
+      description={description}
       actions={actions}
       collapsible={true}
       defaultExpanded={false}
     >
       {eventDetail ? (
         <ExpandedContent
-          eventId={event.id}
+          event={event}
           eventDetail={{
             summary: eventDetail.summary,
-            merit_distribution: eventDetail.merit_distribution,
+            metrics: eventDetail.metrics,
           }}
         />
       ) : (

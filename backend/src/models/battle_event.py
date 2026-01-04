@@ -83,3 +83,4 @@ class BattleEventListItem(BaseModel):
     participation_rate: float | None = None
     total_merit: int | None = None
     mvp_name: str | None = None
+    absent_count: int | None = None

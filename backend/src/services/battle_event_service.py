@@ -116,12 +116,14 @@ class BattleEventService:
             participation_rate = None
             total_merit = None
             mvp_name = None
+            absent_count = None
 
             if event.status == EventStatus.COMPLETED:
                 summary = await self._calculate_event_summary(event.id)
                 participation_rate = summary.participation_rate
                 total_merit = summary.total_merit
                 mvp_name = summary.mvp_member_name
+                absent_count = summary.absent_count
 
             result.append(
                 BattleEventListItem(
@@ -135,6 +137,7 @@ class BattleEventService:
                     participation_rate=participation_rate,
                     total_merit=total_merit,
                     mvp_name=mvp_name,
+                    absent_count=absent_count,
                 )
             )
 

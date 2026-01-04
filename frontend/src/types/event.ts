@@ -100,6 +100,7 @@ export interface EventListItem {
   readonly participation_rate: number | null
   readonly total_merit: number | null
   readonly mvp_name: string | null
+  readonly absent_count: number | null
   readonly created_at: string
 }
 

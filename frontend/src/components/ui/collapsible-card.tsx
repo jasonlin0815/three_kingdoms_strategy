@@ -14,7 +14,7 @@ interface CollapsibleCardProps {
   readonly icon?: ReactNode
   readonly title: ReactNode
   readonly badge?: ReactNode
-  readonly description?: string
+  readonly description?: ReactNode
   readonly children: ReactNode
   readonly actions?: ReactNode
   readonly collapsible?: boolean

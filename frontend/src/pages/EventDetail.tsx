@@ -23,7 +23,6 @@ import { useEventAnalytics } from '@/hooks/use-events'
 import {
   ArrowLeft,
   Users,
-  Trophy,
   Swords,
   Clock,
   ArrowUpDown,
@@ -37,8 +36,9 @@ import {
 } from 'lucide-react'
 import { Bar, BarChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { ChartContainer, ChartConfig, ChartTooltip } from '@/components/ui/chart'
-import { formatNumber, formatNumberCompact } from '@/lib/chart-utils'
-import { getEventIcon, formatEventTime, getEventTypeLabel } from '@/lib/event-utils'
+import { formatNumber, formatNumberCompact, calculateBoxPlotStats } from '@/lib/chart-utils'
+import { BoxPlot } from '@/components/analytics/BoxPlot'
+import { getEventIcon, formatEventTime, getEventTypeLabel, formatDuration, formatTimeRange } from '@/lib/event-utils'
 import type { EventMemberMetric } from '@/types/event'
 import type { DistributionBin } from '@/types/analytics'
 
@@ -500,8 +500,8 @@ function EventDetail() {
           </div>
         </div>
 
-        {/* KPI Grid */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {/* KPI Grid - 3 cards: Participation, Total Merit, Duration */}
+        <div className="grid gap-4 grid-cols-3">
           <KpiCard
             title="參與率"
             value={`${summary.participation_rate}%`}
@@ -516,18 +516,35 @@ function EventDetail() {
             highlight
           />
           <KpiCard
-            title="MVP"
-            value={summary.mvp_member_name ?? '-'}
-            subtitle={summary.mvp_merit != null ? `${formatNumber(summary.mvp_merit)} 戰功` : undefined}
-            icon={<Trophy className="h-5 w-5" />}
-          />
-          <KpiCard
-            title="平均戰功"
-            value={formatNumber(summary.avg_merit)}
-            subtitle={`${summary.participated_count} 位參與者`}
-            icon={<TrendingUp className="h-5 w-5" />}
+            title="持續時間"
+            value={formatDuration(event.event_start, event.event_end) ?? '-'}
+            subtitle={formatTimeRange(event.event_start, event.event_end) ?? undefined}
+            icon={<Clock className="h-5 w-5" />}
           />
         </div>
+
+        {/* Box Plot - Merit Distribution Overview */}
+        {(() => {
+          const participatedValues = metrics
+            .filter((m) => m.participated)
+            .map((m) => m.merit_diff)
+          const meritStats = calculateBoxPlotStats(participatedValues)
+          if (!meritStats) return null
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  戰功分佈概覽
+                </CardTitle>
+                <CardDescription>參與成員的戰功統計 (Min / Q1 / Median / Q3 / Max)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <BoxPlot stats={meritStats} showLabels={true} />
+              </CardContent>
+            </Card>
+          )
+        })()}
 
         {/* Merit Distribution */}
         <MeritDistribution distribution={merit_distribution} />

@@ -98,3 +98,53 @@ export function formatEventTime(
 export function getEventTypeBadgeVariant(): 'secondary' {
   return 'secondary'
 }
+
+/**
+ * Calculate duration between two timestamps
+ *
+ * @param start - ISO timestamp for start
+ * @param end - ISO timestamp for end
+ * @returns Duration string (e.g., "53 分鐘", "2 小時 15 分鐘") or null if invalid
+ */
+export function formatDuration(start: string | null, end: string | null): string | null {
+  if (!start || !end) return null
+
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  const durationMs = endDate.getTime() - startDate.getTime()
+
+  if (durationMs <= 0) return null
+
+  const hours = Math.floor(durationMs / (1000 * 60 * 60))
+  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60))
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} 小時 ${minutes} 分鐘` : `${hours} 小時`
+  }
+  return `${minutes} 分鐘`
+}
+
+/**
+ * Format time range without date (e.g., "06:42-07:35")
+ */
+export function formatTimeRange(start: string | null, end: string | null): string | null {
+  if (!start) return null
+
+  const startDate = new Date(start)
+  const startTime = startDate.toLocaleTimeString('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  if (!end) return startTime
+
+  const endDate = new Date(end)
+  const endTime = endDate.toLocaleTimeString('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  return `${startTime}-${endTime}`
+}

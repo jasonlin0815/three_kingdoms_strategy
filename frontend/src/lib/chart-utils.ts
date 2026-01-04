@@ -137,6 +137,54 @@ export function getPeriodBoundaryTicks<T extends PeriodData>(periods: readonly T
 }
 
 // =============================================================================
+// Box Plot Statistics
+// =============================================================================
+
+/**
+ * Box plot statistics interface
+ */
+export interface BoxPlotStats {
+  readonly min: number
+  readonly q1: number
+  readonly median: number
+  readonly q3: number
+  readonly max: number
+}
+
+/**
+ * Calculate percentile using linear interpolation.
+ * Matches backend Python implementation.
+ */
+function percentile(sortedData: readonly number[], p: number): number {
+  if (sortedData.length === 0) return 0
+  const k = (sortedData.length - 1) * p
+  const f = Math.floor(k)
+  const c = Math.min(f + 1, sortedData.length - 1)
+  return sortedData[f] + (sortedData[c] - sortedData[f]) * (k - f)
+}
+
+/**
+ * Calculate box plot statistics from an array of values.
+ * Returns min, Q1, median, Q3, max.
+ *
+ * @param values - Array of numeric values
+ * @returns BoxPlotStats or null if values is empty
+ */
+export function calculateBoxPlotStats(values: readonly number[]): BoxPlotStats | null {
+  if (values.length === 0) return null
+
+  const sorted = [...values].sort((a, b) => a - b)
+
+  return {
+    min: sorted[0],
+    q1: percentile(sorted, 0.25),
+    median: percentile(sorted, 0.5),
+    q3: percentile(sorted, 0.75),
+    max: sorted[sorted.length - 1],
+  }
+}
+
+// =============================================================================
 // Distribution Bin Utilities
 // =============================================================================
 
