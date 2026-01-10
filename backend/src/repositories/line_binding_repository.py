@@ -516,14 +516,17 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         command_id: UUID,
         update_data: dict[str, str | bool]
     ) -> LineCustomCommand:
-        result = await self._execute_async(
-            lambda: self.client
-            .from_("line_custom_commands")
-            .update(update_data)
-            .eq("id", str(command_id))
-            .select("*")
-            .execute()
-        )
+        try:
+            result = await self._execute_async(
+                lambda: self.client
+                .from_("line_custom_commands")
+                .update(update_data)
+                .eq("id", str(command_id))
+                .select("*")
+                .execute()
+            )
+        except Exception as e:
+            raise ValueError(f"Supabase update failed: {e}") from e
 
         data = self._handle_supabase_result(result, expect_single=True)
         return LineCustomCommand(**data)
