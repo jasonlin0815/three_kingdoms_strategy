@@ -317,6 +317,24 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         data = self._handle_supabase_result(result, allow_empty=True)
         return [MemberLineBinding(**row) for row in data]
 
+    async def search_member_bindings(
+        self,
+        alliance_id: UUID,
+        query: str
+    ) -> list[MemberLineBinding]:
+        """Search member bindings by game ID (case-insensitive)."""
+        result = await self._execute_async(
+            lambda: self.client
+            .from_("member_line_bindings")
+            .select("*")
+            .eq("alliance_id", str(alliance_id))
+            .ilike("game_id", f"%{query}%")
+            .execute()
+        )
+
+        data = self._handle_supabase_result(result, allow_empty=True)
+        return [MemberLineBinding(**row) for row in data]
+
     async def create_member_binding(
         self,
         alliance_id: UUID,

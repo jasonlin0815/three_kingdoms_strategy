@@ -663,17 +663,60 @@ async def _handle_group_message(
     bot_user_id = settings.line_bot_user_id
 
     if bot_user_id and _is_bot_mentioned(mentionees, bot_user_id):
-        command_keyword = _extract_custom_command(text)
-        if command_keyword in {"/綁定", "/绑定"}:
-            command_keyword = None
-        if command_keyword:
-            command = await service.get_custom_command_response(
+        # If bot is mentioned, try to extract the text arguments that follow the mention.
+        # LINE mention payload usually includes index/length for the mention; use that if available.
+        mentionee = next((m for m in mentionees if m.get("userId") == bot_user_id), None)
+        args_text = ""
+        if mentionee and isinstance(mentionee.get("index"), int) and isinstance(mentionee.get("length"), int):
+            start = mentionee["index"] + mentionee["length"]
+            args_text = text[start:].strip()
+        else:
+            # Fallback: remove the first token (likely the mention) if present
+            parts = text.split()
+            args_text = " ".join(parts[1:]).strip() if len(parts) > 1 else ""
+
+        # If arguments start with '/', treat as a command and route to existing command handling
+        if args_text.startswith("/"):
+            command_keyword = _extract_custom_command(args_text)
+            if command_keyword in {"/綁定", "/绑定"}:
+                command_keyword = None
+            if command_keyword:
+                command = await service.get_custom_command_response(
+                    line_group_id=line_group_id,
+                    trigger_keyword=command_keyword,
+                )
+                if command:
+                    await _reply_text(reply_token, command.response_message)
+                    return
+            # Unknown command: fall back to LIFF entry
+            await _send_liff_entry(
                 line_group_id=line_group_id,
-                trigger_keyword=command_keyword,
+                reply_token=reply_token,
+                settings=settings,
             )
-            if command:
-                await _reply_text(reply_token, command.response_message)
+            return
+
+        # If there are arguments that do NOT start with '/', perform a search on registered members
+        if args_text:
+            results = await service.search_registered_members(
+                line_group_id=line_group_id,
+                query=args_text,
+            )
+
+            # Format response
+            if not results:
+                await _reply_text(reply_token, f"搜尋結果 (共0筆):")
                 return
+
+            lines = [f"搜尋結果 (共{len(results)}筆):"]
+            for i, r in enumerate(results, start=1):
+                display = r.line_display_name or ""
+                lines.append(f"{i}. {r.game_id} ({display})")
+
+            await _reply_text(reply_token, "\n".join(lines))
+            return
+
+        # No arguments after mention: send LIFF entry
         await _send_liff_entry(
             line_group_id=line_group_id,
             reply_token=reply_token,
