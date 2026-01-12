@@ -23,6 +23,7 @@ import {
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RankChangeIndicator } from '@/components/analytics/RankChangeIndicator'
 import { ViewModeToggle, type ViewMode } from '@/components/analytics/ViewModeToggle'
+import { MemberCombobox } from '@/components/analytics/member-combobox'
 import {
   TrendingUp,
   TrendingDown,
@@ -1499,25 +1500,16 @@ function MemberPerformance() {
             </>
           )}
 
-          {/* Member Selector */}
+          {/* Member Selector with Search */}
           <span className="text-sm text-muted-foreground">成員:</span>
-          <Select
-            value={selectedMemberId ?? ''}
+          <MemberCombobox
+            members={filteredAndSortedMembers}
+            value={selectedMemberId}
             onValueChange={setSelectedMemberId}
-            disabled={isLoadingMembers || !filteredAndSortedMembers.length}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder={isLoadingMembers ? '載入中...' : '選擇成員'} />
-            </SelectTrigger>
-            <SelectContent className="max-h-60">
-              {filteredAndSortedMembers.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.contribution_rank ? `#${member.contribution_rank} ` : ''}
-                  {member.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            disabled={!filteredAndSortedMembers.length}
+            isLoading={isLoadingMembers}
+            placeholder="選擇成員"
+          />
           {selectedMember && seasonSummary && (
             <span className="text-sm text-muted-foreground">
               排名 #{seasonSummary.current_rank} / {totalMembers}人
