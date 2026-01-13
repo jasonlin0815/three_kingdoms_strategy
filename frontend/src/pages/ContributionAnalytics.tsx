@@ -40,34 +40,56 @@ function ContributionAnalytics() {
 
     // Dialog form state
     const [dialogOpen, setDialogOpen] = useState(false)
+    const [newTitle, setNewTitle] = useState('')
+    const [newType, setNewType] = useState<'alliance' | 'punish'>('alliance')
     const [newAmount, setNewAmount] = useState('')
     const [newDeadline, setNewDeadline] = useState('')
 
 
     // Handlers
     const handleOpenDialog = useCallback(() => {
+        const today = new Date().toISOString().slice(0, 10)
         setDialogOpen(true)
+        setNewTitle('')
+        setNewType('alliance')
         setNewAmount('')
-        setNewDeadline('')
+        setNewDeadline(today)
     }, [])
 
     const handleCloseDialog = useCallback(() => {
         setDialogOpen(false)
+        setNewTitle('')
+        setNewType('alliance')
         setNewAmount('')
         setNewDeadline('')
     }, [])
 
     const handleAdd = useCallback(() => {
+        if (!newTitle) return alert('請輸入活動標題')
         const amount = Number(newAmount)
-        if (!newDeadline || Number.isNaN(amount) || amount <= 0) return
+        if (newType === 'alliance' && (Number.isNaN(amount) || amount <= 0)) return alert('請輸入每名成員的捐獻金額（大於 0）')
+
+        const payload = {
+            id: nanoid(),
+            title: newTitle,
+            type: newType,
+            amount: newType === 'alliance' ? Number(newAmount) : 0,
+            deadline: newDeadline,
+            contributions: {},
+        }
 
         setDeadlines((prev) => [
             ...prev,
-            { id: nanoid(), amount, deadline: newDeadline, contributions: {} }
+            payload
         ].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()))
 
         handleCloseDialog()
-    }, [newAmount, newDeadline, handleCloseDialog])
+
+        if (newType === 'punish') {
+            // Inform user they can enter individual punishments after creation
+            alert('已建立懲罰活動。您可以在建立後為輸入成員懲罰金額。')
+        }
+    }, [newTitle, newType, newAmount, newDeadline, handleCloseDialog])
 
 
 
@@ -146,9 +168,29 @@ function ContributionAnalytics() {
 
                         <div className="space-y-4 pt-2">
                             <div className="space-y-2">
-                                <Label htmlFor="dialog-amount">每名成員捐獻資源總量</Label>
-                                <Input id="dialog-amount" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="例如：20000" type="number" />
+                                <Label htmlFor="dialog-title">活動標題</Label>
+                                <Input id="dialog-title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="例如：年度捐獻活動" />
                             </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="dialog-type">活動類型</Label>
+                                <div>
+                                    <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as any)} className="w-full rounded-md border px-3 py-2">
+                                        <option value="alliance">同盟捐献</option>
+                                        <option value="punish">惩罚</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {newType === 'alliance' ? (
+                                <div className="space-y-2">
+                                    <Label htmlFor="dialog-amount">每名成員捐獻資源總量</Label>
+                                    <Input id="dialog-amount" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="例如：20000" type="number" />
+                                </div>
+                            ) : (
+                                <div className="p-3 rounded bg-muted text-sm text-muted-foreground">您可以在建立活動後為輸入成員個別的懲罰金額。</div>
+                            )}
+
                             <div className="space-y-2">
                                 <Label htmlFor="dialog-deadline">截止日</Label>
                                 <Input id="dialog-deadline" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} type="date" />
