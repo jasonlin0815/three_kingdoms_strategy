@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RoleGuard } from '@/components/alliance/RoleGuard'
 import { useSeasons } from '@/hooks/use-seasons'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { nanoid } from 'nanoid'
 
 import { useAnalyticsMembers } from '@/hooks/use-analytics'
@@ -43,7 +43,7 @@ function ContributionAnalytics() {
     const activeSeason = seasons?.find((s) => s.is_active)
 
     // Members list (used to show who's completed)
-    const { data: members } = useAnalyticsMembers(activeSeason?.id, true) as any
+    const { data: members } = useAnalyticsMembers(activeSeason?.id, true)
 
     // Local state for contribution deadlines (stored in-memory for skeleton)
     const [deadlines, setDeadlines] = useState<ContributionDeadline[]>([])
@@ -54,6 +54,11 @@ function ContributionAnalytics() {
     const [newType, setNewType] = useState<'alliance' | 'punish'>('alliance')
     const [newAmount, setNewAmount] = useState('')
     const [newDeadline, setNewDeadline] = useState('')
+
+    // Punishment editing state
+    const [editingDeadlineId, setEditingDeadlineId] = useState<string | null>(null)
+    const [selectedMemberId, setSelectedMemberId] = useState('')
+    const [punishmentAmount, setPunishmentAmount] = useState('')
 
 
     // Handlers
@@ -149,8 +154,14 @@ function ContributionAnalytics() {
                             const contribMap = d.contributions || {}
 
                             const perMemberTarget = d.amount || (memberCount > 0 ? Math.round(targetTotal / memberCount) : 0)
-                            const sortedMembers = members
-                                ? [...members].sort((a: any, b: any) => (contribMap[b.id] || 0) - (contribMap[a.id] || 0))
+
+                            // For alliance: use all members; for punishment: use only members with contributions (local cache)
+                            const displayMembers = d.type === 'punish'
+                                ? Object.keys(contribMap).map(memberId => members?.find((m: any) => m.id === memberId)).filter(Boolean)
+                                : members
+
+                            const sortedMembers = displayMembers
+                                ? [...displayMembers].sort((a: any, b: any) => (contribMap[b.id] || 0) - (contribMap[a.id] || 0))
                                 : []
 
                             return (
@@ -166,55 +177,129 @@ function ContributionAnalytics() {
                                     members={members}
                                     contributions={d.contributions}
                                 >
-                                    {d.type === 'alliance' && (
-                                        <div className="space-y-4">
-                                            <div className="space-y-3">
-                                                <p className="text-sm font-medium">成員捐獻進度</p>
-                                                {members == null ? (
-                                                    <div className="py-2 text-center text-muted-foreground text-sm">載入中...</div>
-                                                ) : members.length === 0 ? (
-                                                    <div className="text-sm text-muted-foreground">尚無成員</div>
-                                                ) : (
-                                                    <Table>
-                                                        <TableHeader>
-                                                            <TableRow>
-                                                                <TableHead>成員</TableHead>
-                                                                <TableHead className="text-right">已捐獻 / 目標</TableHead>
-                                                                <TableHead className="text-right">進度</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {sortedMembers.map((m: any) => {
-                                                                const amount = contribMap[m.id] || 0
-                                                                const pct = perMemberTarget > 0
-                                                                    ? Math.min(100, Math.round((amount / perMemberTarget) * 100))
-                                                                    : 0
-                                                                return (
-                                                                    <TableRow key={m.id}>
-                                                                        <TableCell className="font-medium">{m.display_name || m.name || m.id}</TableCell>
-                                                                        <TableCell className="text-right tabular-nums text-muted-foreground">
-                                                                            {amount.toLocaleString('zh-TW')} / {perMemberTarget.toLocaleString('zh-TW')}
-                                                                        </TableCell>
-                                                                        <TableCell className="text-right">
-                                                                            <div className="flex items-center justify-end gap-2">
-                                                                                <div className="h-1.5 w-24 rounded-full bg-muted">
-                                                                                    <div
-                                                                                        className={pct >= 100 ? 'h-1.5 rounded-full bg-emerald-500 transition-all' : 'h-1.5 rounded-full bg-primary/70 transition-all'}
-                                                                                        style={{ width: `${pct}%` }}
-                                                                                    />
-                                                                                </div>
-                                                                                <span className="w-7 text-right text-xs font-medium tabular-nums">{pct}%</span>
+                                    <div className="space-y-4">
+                                        <div className="space-y-3">
+                                            {d.type === 'alliance' && <p className="text-sm font-medium">成員捐獻進度</p>}
+
+                                            {d.type === 'punish' && (
+                                                <>
+                                                    <div className="flex items-center justify-between">
+                                                        {editingDeadlineId !== d.id && (
+                                                            <Button size="sm" onClick={() => setEditingDeadlineId(d.id)}>
+                                                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                                                新增懲罰
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    {editingDeadlineId === d.id && (
+                                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                                                            <p className="text-sm font-medium">新增懲罰</p>
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                <select value={selectedMemberId} onChange={(e) => setSelectedMemberId(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
+                                                                    <option value="">選擇成員</option>
+                                                                    {members?.map((m: any) => (
+                                                                        <option key={m.id} value={m.id}>{m.display_name || m.name || m.id}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <input type="number" value={punishmentAmount} onChange={(e) => setPunishmentAmount(e.target.value)} placeholder="總資源量" className="rounded-md border px-2 py-1.5 text-sm" />
+                                                                <div className="flex gap-1">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            if (selectedMemberId && punishmentAmount) {
+                                                                                const amount = Number(punishmentAmount)
+                                                                                if (amount > 0) {
+                                                                                    setDeadlines((prev) =>
+                                                                                        prev.map((deadline) =>
+                                                                                            deadline.id === d.id
+                                                                                                ? {
+                                                                                                    ...deadline,
+                                                                                                    contributions: {
+                                                                                                        ...deadline.contributions,
+                                                                                                        [selectedMemberId]: amount,
+                                                                                                    },
+                                                                                                }
+                                                                                                : deadline
+                                                                                        )
+                                                                                    )
+                                                                                    setSelectedMemberId('')
+                                                                                    setPunishmentAmount('')
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        新增
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => {
+                                                                            setEditingDeadlineId(null)
+                                                                            setSelectedMemberId('')
+                                                                            setPunishmentAmount('')
+                                                                        }}
+                                                                    >
+                                                                        取消
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {members == null ? (
+                                                <div className="py-2 text-center text-muted-foreground text-sm">載入中...</div>
+                                            ) : sortedMembers.length === 0 ? (
+                                                <div className="text-sm text-muted-foreground">
+                                                    {d.type === 'punish' ? '尚無懲罰記錄' : '尚無成員'}
+                                                </div>
+                                            ) : (
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>成員</TableHead>
+                                                            <TableHead className="text-right">已捐獻 / 目標</TableHead>
+                                                            <TableHead className="text-right">進度</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {sortedMembers.map((m: any) => {
+                                                            const amount = contribMap[m.id] || 0
+                                                            const pct = perMemberTarget > 0
+                                                                ? Math.min(100, Math.round((amount / perMemberTarget) * 100))
+                                                                : 0
+                                                            return (
+                                                                <TableRow key={m.id}>
+                                                                    <TableCell className="font-medium">{m.display_name || m.name || m.id}</TableCell>
+                                                                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                                                                        {amount.toLocaleString('zh-TW')} / {perMemberTarget.toLocaleString('zh-TW')}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            <div className="h-1.5 w-24 rounded-full bg-muted">
+                                                                                <div
+                                                                                    className={pct >= 100 ? 'h-1.5 rounded-full bg-emerald-500 transition-all' : 'h-1.5 rounded-full bg-primary/70 transition-all'}
+                                                                                    style={{ width: `${pct}%` }}
+                                                                                />
                                                                             </div>
+                                                                            <span className="w-7 text-right text-xs font-medium tabular-nums">{pct}%</span>
+                                                                        </div>
+                                                                    </TableCell>
+
+                                                                    {d.type === 'punish' &&
+                                                                        <TableCell className="text-right">
+                                                                            <button onClick={() => { setDeadlines((prev) => prev.map((deadline) => deadline.id === d.id ? { ...deadline, contributions: Object.fromEntries(Object.entries(deadline.contributions || {}).filter(([id]) => id !== m.id)) } : deadline)) }} className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></button>
                                                                         </TableCell>
-                                                                    </TableRow>
-                                                                )
-                                                            })}
-                                                        </TableBody>
-                                                    </Table>
-                                                )}
-                                            </div>
+                                                                    }
+                                                                </TableRow>
+                                                            )
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
                                 </ContributionCard>
                             )
                         })}
