@@ -19,9 +19,12 @@ from src.models.contribution import (
     Contribution,
     ContributionCreate,
     ContributionInfo,
+    ContributionTarget,
     ContributionWithInfo,
+    ContributionType,
 )
 from src.repositories.contribution_repository import ContributionRepository
+from src.repositories.contribution_target_repository import ContributionTargetRepository
 from src.repositories.csv_upload_repository import CsvUploadRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.services.permission_service import PermissionService
@@ -33,6 +36,7 @@ class ContributionService:
     def __init__(self):
         """Initialize contribution service"""
         self._contribution_repo = ContributionRepository()
+        self._target_repo = ContributionTargetRepository()
         self._upload_repo = CsvUploadRepository()
         self._snapshot_repo = MemberSnapshotRepository()
         self._permission_service = PermissionService()
@@ -93,20 +97,23 @@ class ContributionService:
         """
         Get contribution event with member contribution info.
 
-        Calculates contribution_made as the difference in total_contribution
-        between snapshots at creation_time and deadline.
+        Returns per-member data from the end snapshot:
+        - If type is ALLIANCE: target comes from stored `target_contribution`
+        - If type is PUNISHMENT: target comes from per-member overrides
 
         Args:
             contribution_id: Contribution UUID
-            target_contribution: Override target for all members (defaults to stored value)
+            target_contribution: Optional override for ALLIANCE type only; ignored for PUNISHMENT
 
         Returns:
             Contribution with member contribution details
         """
         contribution = await self._contribution_repo.get_by_id(contribution_id)
+        is_alliance = contribution.type == ContributionType.ALLIANCE
+        is_punishment = contribution.type == ContributionType.PUNISHMENT
         effective_target = (
             target_contribution
-            if target_contribution is not None
+            if (is_alliance and target_contribution is not None)
             else contribution.target_contribution
         )
 
@@ -136,23 +143,31 @@ class ContributionService:
         # Calculate contributions for all members in end snapshot
         contribution_info_list: list[ContributionInfo] = []
 
+        # For punishment, load per-member target overrides
+        overrides_map: dict[UUID, int] = {}
+        if is_punishment:
+            overrides = await self._target_repo.get_by_contribution(contribution.id)
+            overrides_map = {ov.member_id: ov.target_contribution for ov in overrides}
+
         for member_id, end_snap in end_snapshot_map.items():
             start_snap = start_snapshot_map.get(member_id)
 
-            # Calculate contribution made (diff in total_contribution)
-            start_total = start_snap.total_contribution if start_snap else 0
+            # Use the end snapshot total contribution
             end_total = end_snap.total_contribution
-            contribution_made = max(0, end_total - start_total)
+            # Determine target per type
+            target_for_member = (
+                effective_target if is_alliance else overrides_map.get(member_id, 0)
+            )
 
             contribution_info = ContributionInfo(
                 member_id=member_id,
                 member_name=end_snap.member_name,
-                contribution_target=effective_target,
-                contribution_made=contribution_made,
+                contribution_target=target_for_member,
+                contribution_made=end_total,
             )
             contribution_info_list.append(contribution_info)
 
-        # Sort by contribution_made descending
+        # Sort by total contribution descending
         contribution_info_list.sort(
             key=lambda x: x.contribution_made, reverse=True
         )
@@ -160,3 +175,39 @@ class ContributionService:
         return ContributionWithInfo(
             **contribution.model_dump(), contribution_info=contribution_info_list
         )
+
+    async def set_member_target_override(
+        self,
+        contribution_id: UUID,
+        member_id: UUID,
+        target_contribution: int,
+        user_id: UUID,
+    ) -> ContributionTarget:
+        """Set or update a per-member contribution target override"""
+        # Verify user has access via contribution's alliance
+        contribution = await self._contribution_repo.get_by_id(contribution_id)
+        await self._permission_service.verify_alliance_access(
+            user_id, contribution.alliance_id
+        )
+
+        return await self._target_repo.upsert_target(
+            contribution_id, member_id, target_contribution
+        )
+
+    async def delete_contribution(self, contribution_id: UUID, user_id: UUID) -> None:
+        """Delete a contribution event after access check"""
+        contribution = await self._contribution_repo.get_by_id(contribution_id)
+        await self._permission_service.verify_alliance_access(
+            user_id, contribution.alliance_id
+        )
+        await self._contribution_repo.delete(contribution_id)
+
+    async def delete_member_target_override(
+        self, contribution_id: UUID, member_id: UUID, user_id: UUID
+    ) -> None:
+        """Delete a member's target override after access check"""
+        contribution = await self._contribution_repo.get_by_id(contribution_id)
+        await self._permission_service.verify_alliance_access(
+            user_id, contribution.alliance_id
+        )
+        await self._target_repo.delete_target(contribution_id, member_id)

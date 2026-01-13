@@ -75,3 +75,12 @@ class ContributionDetailResponse(BaseModel):
     created_at: datetime
     created_by: UUID | None
     contribution_info: list[ContributionInfoResponse]
+
+
+class ContributionTargetOverrideRequest(BaseModel):
+    """Request body for per-member target override"""
+
+    member_id: UUID = Field(..., description="Member UUID")
+    target_contribution: int = Field(
+        ..., ge=0, description="Override target amount for the member"
+    )

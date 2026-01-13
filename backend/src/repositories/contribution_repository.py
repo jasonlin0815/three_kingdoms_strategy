@@ -87,3 +87,13 @@ class ContributionRepository(SupabaseRepository[Contribution]):
         )
         data = self._handle_supabase_result(result, expect_single=True)
         return self._build_model(data)
+
+    async def delete(self, contribution_id: UUID) -> None:
+        """Delete a contribution event by ID"""
+        await self._execute_async(
+            lambda: self.client
+            .from_(self.table_name)
+            .delete()
+            .eq("id", str(contribution_id))
+            .execute()
+        )

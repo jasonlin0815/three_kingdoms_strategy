@@ -8,6 +8,7 @@ from src.repositories.alliance_repository import AllianceRepository
 from src.repositories.battle_event_metrics_repository import BattleEventMetricsRepository
 from src.repositories.battle_event_repository import BattleEventRepository
 from src.repositories.contribution_repository import ContributionRepository
+from src.repositories.contribution_target_repository import ContributionTargetRepository
 from src.repositories.csv_upload_repository import CsvUploadRepository
 from src.repositories.member_period_metrics_repository import MemberPeriodMetricsRepository
 from src.repositories.member_repository import MemberRepository
@@ -20,6 +21,7 @@ __all__ = [
     "BattleEventRepository",
     "BattleEventMetricsRepository",
     "ContributionRepository",
+    "ContributionTargetRepository",
     "SeasonRepository",
     "CsvUploadRepository",
     "MemberRepository",

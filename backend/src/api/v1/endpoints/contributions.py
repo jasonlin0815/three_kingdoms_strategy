@@ -19,6 +19,7 @@ from src.api.v1.schemas.contributions import (
     ContributionInfoResponse,
     ContributionListResponse,
     CreateContributionRequest,
+    ContributionTargetOverrideRequest,
 )
 from src.core.dependencies import UserIdDep
 from src.models.contribution import ContributionCreate
@@ -121,21 +122,21 @@ async def create_contribution(
 @router.get("/{contribution_id}", response_model=ContributionDetailResponse)
 async def get_contribution_detail(
     contribution_id: UUID,
-    target_contribution: int | None = None,
     user_id: UserIdDep,
     service: ContributionServiceDep,
 ) -> ContributionDetailResponse:
     """
     Get contribution event with member contribution details
 
-    Calculates contribution_made from snapshots between creation_time and deadline
-    using the difference in total_contribution.
+    Returns per-member data from the end snapshot:
+    - If type is ALLIANCE: targets come from stored `target_contribution`
+    - If type is PUNISHMENT: targets come from per-member overrides
 
     Path Parameters:
         contribution_id: Contribution UUID
 
     Query Parameters:
-        target_contribution: Override target amount for all members (defaults to stored value)
+        target_contribution: Optional override for ALLIANCE type; ignored for PUNISHMENT
 
     Returns:
         Contribution event with member contribution info
@@ -163,3 +164,52 @@ async def get_contribution_detail(
             for info in contribution_with_info.contribution_info
         ],
     )
+
+
+@router.post("/{contribution_id}/targets", status_code=204)
+async def upsert_member_target_override(
+    contribution_id: UUID,
+    body: ContributionTargetOverrideRequest,
+    user_id: UserIdDep,
+    service: ContributionServiceDep,
+) -> None:
+    """
+    Insert or update a per-member target override for a contribution.
+
+    Path Parameters:
+        contribution_id: Contribution UUID
+
+    Body:
+        member_id: Member UUID
+        target_contribution: Override target for this member
+
+    Returns:
+        No content on success (204)
+    """
+    await service.set_member_target_override(
+        contribution_id=contribution_id,
+        member_id=body.member_id,
+        target_contribution=body.target_contribution,
+        user_id=user_id,
+    )
+
+
+@router.delete("/{contribution_id}", status_code=204)
+async def delete_contribution(
+    contribution_id: UUID,
+    user_id: UserIdDep,
+    service: ContributionServiceDep,
+) -> None:
+    """Delete a contribution event"""
+    await service.delete_contribution(contribution_id, user_id)
+
+
+@router.delete("/{contribution_id}/targets/{member_id}", status_code=204)
+async def delete_member_target_override(
+    contribution_id: UUID,
+    member_id: UUID,
+    user_id: UserIdDep,
+    service: ContributionServiceDep,
+) -> None:
+    """Delete a member's target override for a contribution"""
+    await service.delete_member_target_override(contribution_id, member_id, user_id)

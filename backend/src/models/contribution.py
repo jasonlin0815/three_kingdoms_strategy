@@ -66,3 +66,17 @@ class ContributionWithInfo(Contribution):
     contribution_info: list[ContributionInfo] = Field(
         default_factory=list, description="List of member contributions"
     )
+
+
+class ContributionTarget(BaseModel):
+    """Per-member target override for a contribution event"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID | None = Field(None, description="Target override ID")
+    contribution_id: UUID = Field(..., description="Contribution event ID")
+    member_id: UUID = Field(..., description="Member UUID")
+    target_contribution: int = Field(..., ge=0, description="Override target amount")
+    created_at: datetime | None = Field(
+        default=None, description="Timestamp when override was created"
+    )
