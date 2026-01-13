@@ -18,6 +18,13 @@ from src.models.battle_event_metrics import (
     BattleEventMetricsWithMember,
     EventSummary,
 )
+from src.models.contribution import (
+    Contribution,
+    ContributionCreate,
+    ContributionInfo,
+    ContributionType,
+    ContributionWithInfo,
+)
 from src.models.csv_upload import CsvUpload, CsvUploadCreate, CsvUploadUpdate
 from src.models.member import Member, MemberCreate, MemberUpdate
 from src.models.member_period_metrics import (
@@ -50,6 +57,12 @@ __all__ = [
     "BattleEventMetricsCreate",
     "BattleEventMetricsWithMember",
     "EventSummary",
+    # Contribution models
+    "Contribution",
+    "ContributionCreate",
+    "ContributionInfo",
+    "ContributionType",
+    "ContributionWithInfo",
     # Season models
     "Season",
     "SeasonCreate",
