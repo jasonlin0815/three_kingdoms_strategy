@@ -28,6 +28,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
+import { StatusType } from '@/components/contributions/StatusBadge'
+import { MemberListItem } from '@/types/analytics'
 
 interface ContributionDeadline {
     id: string
@@ -145,11 +147,11 @@ function ContributionAnalytics() {
                             const memberCount = (members && members.length) || 1
                             const targetTotal = d.amount * memberCount
                             const isExpired = new Date(d.deadline).getTime() < Date.now()
-                            const status: any = isExpired ? (total >= targetTotal ? 'completed' : 'expired') : (total >= targetTotal ? 'completed' : 'in-progress')
+                            const status: StatusType = isExpired ? 'expired' : 'in-progress';
 
                             const tags = d.type === 'punish'
-                                ? [{ id: 'punish', label: '惩罚' }]
-                                : [{ id: 'alliance', label: '同盟捐献' }]
+                                ? [{ id: 'punish', label: '懲罰' }]
+                                : [{ id: 'alliance', label: '捐獻' }]
 
                             const contribMap = d.contributions || {}
 
@@ -157,7 +159,7 @@ function ContributionAnalytics() {
 
                             // For alliance: use all members; for punishment: use only members with contributions (local cache)
                             const displayMembers = d.type === 'punish'
-                                ? Object.keys(contribMap).map(memberId => members?.find((m: any) => m.id === memberId)).filter(Boolean)
+                                ? Object.keys(contribMap).map(memberId => members?.find((m: MemberListItem) => m.id === memberId)).filter(Boolean)
                                 : members
 
                             const sortedMembers = displayMembers
