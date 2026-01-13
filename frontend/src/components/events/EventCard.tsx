@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { MiniMetricCard } from '@/components/ui/MiniMetricCard.tsx'
 import { ChevronRight, CheckCircle, XCircle, UserPlus, Users, Swords, Clock, Trophy } from 'lucide-react'
 import { formatNumberCompact, formatNumber, calculateBoxPlotStats } from '@/lib/chart-utils'
 import { BoxPlot } from '@/components/analytics/BoxPlot'
@@ -40,34 +40,6 @@ interface EventCardProps {
     metrics: readonly EventMemberMetric[]
     merit_distribution: readonly DistributionBin[]
   } | null
-}
-
-// ============================================================================
-// KPI Mini Card
-// ============================================================================
-
-interface KpiMiniCardProps {
-  readonly title: string
-  readonly value: string | number
-  readonly subtitle?: string
-  readonly icon?: React.ReactNode
-}
-
-function KpiMiniCard({ title, value, subtitle, icon }: KpiMiniCardProps) {
-  return (
-    <Card>
-      <CardContent className="py-3 px-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">{title}</p>
-            <p className="text-lg font-bold tabular-nums mt-0.5">{value}</p>
-            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-          </div>
-          {icon && <div className="text-muted-foreground">{icon}</div>}
-        </div>
-      </CardContent>
-    </Card>
-  )
 }
 
 // ============================================================================
@@ -152,18 +124,18 @@ function ExpandedContent({ event, eventDetail }: ExpandedContentProps) {
     <div className="space-y-4">
       {/* KPI Grid - 3 cards: Participation, Total Merit, Duration */}
       <div className="grid gap-3 grid-cols-3">
-        <KpiMiniCard
+        <MiniMetricCard
           title="參與率"
           value={`${summary.participation_rate}%`}
           subtitle={`${summary.participated_count}/${summary.total_members - summary.new_member_count} 人`}
           icon={<Users className="h-4 w-4" />}
         />
-        <KpiMiniCard
+        <MiniMetricCard
           title="總戰功"
           value={formatNumberCompact(summary.total_merit)}
           icon={<Swords className="h-4 w-4" />}
         />
-        <KpiMiniCard
+        <MiniMetricCard
           title="持續時間"
           value={duration ?? '-'}
           subtitle={timeRange ?? undefined}

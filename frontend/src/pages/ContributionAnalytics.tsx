@@ -20,6 +20,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
 
 interface ContributionDeadline {
     id: string
@@ -138,6 +146,13 @@ function ContributionAnalytics() {
                                 ? [{ id: 'punish', label: '惩罚' }]
                                 : [{ id: 'alliance', label: '同盟捐献' }]
 
+                            const contribMap = d.contributions || {}
+
+                            const perMemberTarget = d.amount || (memberCount > 0 ? Math.round(targetTotal / memberCount) : 0)
+                            const sortedMembers = members
+                                ? [...members].sort((a: any, b: any) => (contribMap[b.id] || 0) - (contribMap[a.id] || 0))
+                                : []
+
                             return (
                                 <ContributionCard
                                     key={d.id}
@@ -148,7 +163,59 @@ function ContributionAnalytics() {
                                     targetAmount={targetTotal}
                                     status={status}
                                     perPersonTarget={d.amount}
-                                />
+                                    members={members}
+                                    contributions={d.contributions}
+                                >
+                                    {d.type === 'alliance' && (
+                                        <div className="space-y-4">
+                                            <div className="space-y-3">
+                                                <p className="text-sm font-medium">成員捐獻進度</p>
+                                                {members == null ? (
+                                                    <div className="py-2 text-center text-muted-foreground text-sm">載入中...</div>
+                                                ) : members.length === 0 ? (
+                                                    <div className="text-sm text-muted-foreground">尚無成員</div>
+                                                ) : (
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>成員</TableHead>
+                                                                <TableHead className="text-right">已捐獻 / 目標</TableHead>
+                                                                <TableHead className="text-right">進度</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {sortedMembers.map((m: any) => {
+                                                                const amount = contribMap[m.id] || 0
+                                                                const pct = perMemberTarget > 0
+                                                                    ? Math.min(100, Math.round((amount / perMemberTarget) * 100))
+                                                                    : 0
+                                                                return (
+                                                                    <TableRow key={m.id}>
+                                                                        <TableCell className="font-medium">{m.display_name || m.name || m.id}</TableCell>
+                                                                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                                                                            {amount.toLocaleString('zh-TW')} / {perMemberTarget.toLocaleString('zh-TW')}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-right">
+                                                                            <div className="flex items-center justify-end gap-2">
+                                                                                <div className="h-1.5 w-24 rounded-full bg-muted">
+                                                                                    <div
+                                                                                        className={pct >= 100 ? 'h-1.5 rounded-full bg-emerald-500 transition-all' : 'h-1.5 rounded-full bg-primary/70 transition-all'}
+                                                                                        style={{ width: `${pct}%` }}
+                                                                                    />
+                                                                                </div>
+                                                                                <span className="w-7 text-right text-xs font-medium tabular-nums">{pct}%</span>
+                                                                            </div>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                )
+                                                            })}
+                                                        </TableBody>
+                                                    </Table>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </ContributionCard>
                             )
                         })}
                     </div>
@@ -173,7 +240,7 @@ function ContributionAnalytics() {
                                 <div>
                                     <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as any)} className="w-full rounded-md border px-3 py-2">
                                         <option value="alliance">同盟捐献</option>
-                                        <option value="punish">惩罚</option>
+                                        <option value="punish">懲罰</option>
                                     </select>
                                 </div>
                             </div>

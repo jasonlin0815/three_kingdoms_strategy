@@ -4,6 +4,12 @@ import { StatusBadge, type StatusType } from './StatusBadge'
 import { ProgressBar } from './ProgressBar'
 import { cn } from '@/lib/utils'
 
+interface MemberLike {
+    id: string
+    name?: string
+    display_name?: string
+}
+
 interface Tag {
     id: string
     label: string
@@ -17,7 +23,9 @@ interface ContributionCardProps {
     targetAmount: number
     status: StatusType
     perPersonTarget?: number
-    description?: string
+    members?: MemberLike[] | null
+    contributions?: Record<string, number>
+    children?: React.ReactNode
 }
 
 export function ContributionCard({
@@ -28,11 +36,12 @@ export function ContributionCard({
     targetAmount,
     status,
     perPersonTarget,
-    description,
+    children,
 }: ContributionCardProps) {
     const [isOpen, setIsOpen] = useState(false)
 
     const formatNumber = (num: number) => num.toLocaleString('zh-TW')
+
 
     return (
         <div className={cn('overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-shadow hover:shadow-md', isOpen && 'shadow-md')}>
@@ -94,9 +103,9 @@ export function ContributionCard({
             {/* Expandable content */}
             {isOpen && (
                 <div className="animate-in slide-in-from-top-2 duration-200 ease-out overflow-hidden">
-                    <div className="border-t border-border bg-secondary/30 px-4 py-4 pl-[4.5rem]">
-                        {description ? (
-                            <p className="text-sm text-muted-foreground">{description}</p>
+                    <div className="border-t border-border bg-card px-4 py-4 space-y-4">
+                        {children ? (
+                            <div className="space-y-3 pl-6 pr-6">{children}</div>
                         ) : (
                             <p className="text-sm italic text-muted-foreground">暫無詳細說明</p>
                         )}
