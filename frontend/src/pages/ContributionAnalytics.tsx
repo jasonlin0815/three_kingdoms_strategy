@@ -54,7 +54,8 @@ function ContributionAnalytics() {
     // Dialog form state
     const [dialogOpen, setDialogOpen] = useState(false)
     const [newTitle, setNewTitle] = useState('')
-    const [newType, setNewType] = useState<'regular' | 'penalty'>('regular')
+    type ContributionType = 'regular' | 'penalty'
+    const [newType, setNewType] = useState<ContributionType>('regular')
     const [newAmount, setNewAmount] = useState('')
     const [newDeadline, setNewDeadline] = useState('')
 
@@ -98,7 +99,7 @@ function ContributionAnalytics() {
             onSuccess: () => {
                 handleCloseDialog()
             },
-            onError: (error: any) => {
+            onError: (error: Error) => {
                 alert('新增失敗: ' + (error.message || '未知錯誤'))
             }
         })
@@ -157,18 +158,18 @@ function ContributionAnalytics() {
                             // Get detailed info if this contribution is expanded
                             const detail = expandedId === d.id ? expandedDetail : null
                             const contribMap: Record<string, number> = {}
+                            const targetMap: Record<string, number> = {}
                             let total = 0
                             let targetTotal = 0
 
                             if (detail?.contribution_info) {
                                 detail.contribution_info.forEach(info => {
                                     contribMap[info.member_id] = info.contribution_made
+                                    targetMap[info.member_id] = info.target_amount
                                     total += info.contribution_made
                                     targetTotal += info.target_amount
                                 })
                             }
-
-                            const perMemberTarget = d.target_amount
 
                             // Build members list from contribution detail
                             const members = detail?.contribution_info?.map(info => ({
@@ -192,7 +193,7 @@ function ContributionAnalytics() {
                             }
 
                             return (
-                                <div key={d.id} onClick={() => handleCardClick(d.id, expandedId === d.id)}>
+                                <div key={d.id}>
                                     <ContributionCard
                                         title={d.title}
                                         tags={tags}
@@ -201,6 +202,8 @@ function ContributionAnalytics() {
                                         perPersonTarget={d.type === 'regular' ? d.target_amount : undefined}
                                         members={members}
                                         contributions={contribMap}
+                                        isOpen={expandedId === d.id}
+                                        onToggle={() => handleCardClick(d.id, expandedId === d.id)}
                                     >
                                         {/* Progress Bar */}
                                         {(total > 0 || targetTotal > 0) && (
@@ -260,7 +263,7 @@ function ContributionAnalytics() {
                                                                                             <div
                                                                                                 key={m.id}
                                                                                                 className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
-                                                                                                onClick={(e) => {
+                                                                                                onClick={() => {
                                                                                                     setSelectedMemberId(m.id)
                                                                                                     setMemberSearchQuery(m.name || m.id)
                                                                                                 }}
@@ -338,14 +341,17 @@ function ContributionAnalytics() {
                                                             <TableBody>
                                                                 {sortedMembers.map((m) => {
                                                                     const amount = contribMap[m.id] || 0
-                                                                    const pct = perMemberTarget > 0
-                                                                        ? Math.min(100, Math.round((amount / perMemberTarget) * 100))
+                                                                    const memberTarget = d.type === 'penalty'
+                                                                        ? (targetMap[m.id] || 0)
+                                                                        : d.target_amount
+                                                                    const pct = memberTarget > 0
+                                                                        ? Math.min(100, Math.round((amount / memberTarget) * 100))
                                                                         : 0
                                                                     return (
                                                                         <TableRow key={m.id}>
                                                                             <TableCell className="font-medium">{m.display_name || m.name || m.id}</TableCell>
                                                                             <TableCell className="text-right tabular-nums text-muted-foreground">
-                                                                                {amount.toLocaleString('zh-TW')} / {perMemberTarget.toLocaleString('zh-TW')}
+                                                                                {amount.toLocaleString('zh-TW')} / {memberTarget.toLocaleString('zh-TW')}
                                                                             </TableCell>
                                                                             <TableCell className="text-right">
                                                                                 <div className="flex items-center justify-end gap-2">
@@ -408,7 +414,7 @@ function ContributionAnalytics() {
                             <div className="space-y-2">
                                 <Label htmlFor="dialog-type">活動類型</Label>
                                 <div>
-                                    <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as any)} className="w-full rounded-md border px-3 py-2">
+                                    <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as ContributionType)} className="w-full rounded-md border px-3 py-2">
                                         <option value="regular">同盟捐献</option>
                                         <option value="penalty">懲罰</option>
                                     </select>

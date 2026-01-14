@@ -1,28 +1,29 @@
-import { useState } from 'react'
 import { ChevronDown, Gift, Calendar } from 'lucide-react'
 import { StatusBadge, type StatusType } from './StatusBadge'
 import { cn } from '@/lib/utils'
 
 interface MemberLike {
-    id: string
-    name?: string
-    display_name?: string
+    readonly id: string
+    readonly name?: string
+    readonly display_name?: string
 }
 
 interface Tag {
-    id: string
-    label: string
+    readonly id: string
+    readonly label: string
 }
 
 interface ContributionCardProps {
-    title: string
-    tags: Tag[]
-    deadline: string
-    status: StatusType
-    perPersonTarget?: number
-    members?: MemberLike[] | null
-    contributions?: Record<string, number>
-    children?: React.ReactNode
+    readonly title: string
+    readonly tags: Tag[]
+    readonly deadline: string
+    readonly status: StatusType
+    readonly perPersonTarget?: number
+    readonly members?: MemberLike[] | null
+    readonly contributions?: Record<string, number>
+    readonly children?: React.ReactNode
+    readonly isOpen?: boolean
+    readonly onToggle?: () => void
 }
 
 export function ContributionCard({
@@ -32,16 +33,16 @@ export function ContributionCard({
     status,
     perPersonTarget,
     children,
+    isOpen = false,
+    onToggle,
 }: ContributionCardProps) {
-    const [isOpen, setIsOpen] = useState(false)
-
     const formatNumber = (num: number) => num.toLocaleString('zh-TW')
 
 
     return (
         <div className={cn('overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-shadow hover:shadow-md', isOpen && 'shadow-md')}>
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={onToggle}
                 className="flex w-full items-start gap-4 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
                 {/* Icon */}
