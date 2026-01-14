@@ -38,7 +38,7 @@ export function useCreateContribution(allianceId: string | undefined, seasonId: 
             if (!allianceId || !seasonId) return Promise.reject(new Error('Missing ids'))
             return apiClient.createContribution(allianceId, seasonId, payload)
         },
-        onSuccess: () => {
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: contributionKeys.list(allianceId, seasonId) })
         },
     })
@@ -48,7 +48,7 @@ export function useDeleteContribution() {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: (id: string) => apiClient.deleteContribution(id),
-        onSuccess: (_data, id) => {
+        onSettled: (_data, _error, id) => {
             queryClient.invalidateQueries({ queryKey: contributionKeys.detail(id) })
             queryClient.invalidateQueries({ queryKey: contributionKeys.all })
         },
@@ -59,7 +59,7 @@ export function useUpsertMemberTargetOverride() {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: ({ contributionId, payload }: { contributionId: string, payload: TargetOverridePayload }) => apiClient.upsertMemberTargetOverride(contributionId, payload),
-        onSuccess: (_data, { contributionId }) => {
+        onSettled: (_data, _error, { contributionId }) => {
             queryClient.invalidateQueries({ queryKey: contributionKeys.detail(contributionId) })
         },
     })
@@ -69,7 +69,7 @@ export function useDeleteMemberTargetOverride() {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: ({ contributionId, memberId }: { contributionId: string, memberId: string }) => apiClient.deleteMemberTargetOverride(contributionId, memberId),
-        onSuccess: (_data, { contributionId }) => {
+        onSettled: (_data, _error, { contributionId }) => {
             queryClient.invalidateQueries({ queryKey: contributionKeys.detail(contributionId) })
         },
     })
