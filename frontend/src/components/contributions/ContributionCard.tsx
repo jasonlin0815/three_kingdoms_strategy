@@ -94,7 +94,7 @@ export function ContributionCard({
 
             {/* Expandable content */}
             {isOpen && (
-                <div className="animate-in slide-in-from-top-2 duration-200 ease-out overflow-hidden">
+                <div className="animate-in slide-in-from-top-2 duration-200 ease-out overflow-hidden" onClick={(e) => e.stopPropagation()}>
                     <div className="border-t border-border bg-card px-4 py-4 space-y-4">
                         {children ? (
                             <div className="space-y-3 pl-6 pr-6">{children}</div>

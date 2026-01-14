@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RoleGuard } from '@/components/alliance/RoleGuard'
 import { useSeasons } from '@/hooks/use-seasons'
+import { useAnalyticsMembers } from '@/hooks/use-analytics'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
 import { useContributions, useContributionDetail, useCreateContribution, useUpsertMemberTargetOverride, useDeleteMemberTargetOverride } from '@/hooks/use-contributions'
 import { ContributionCard } from '@/components/contributions/ContributionCard'
@@ -31,6 +32,9 @@ import {
 function ContributionAnalytics() {
     const { data: seasons } = useSeasons()
     const activeSeason = seasons?.find((s) => s.is_active)
+
+    // Fetch all alliance members for autocomplete
+    const { data: registeredMembers } = useAnalyticsMembers(activeSeason?.id, true)
 
     // Fetch contributions from backend
     const { data: contributions, isLoading } = useContributions(activeSeason?.alliance_id, activeSeason?.id)
@@ -57,6 +61,7 @@ function ContributionAnalytics() {
     // Penalty editing state
     const [editingDeadlineId, setEditingDeadlineId] = useState<string | null>(null)
     const [selectedMemberId, setSelectedMemberId] = useState('')
+    const [memberSearchQuery, setMemberSearchQuery] = useState('')
     const [punishmentAmount, setPunishmentAmount] = useState('')
 
 
@@ -219,7 +224,12 @@ function ContributionAnalytics() {
                                                         <>
                                                             <div className="flex items-center justify-between">
                                                                 {editingDeadlineId !== d.id && (
-                                                                    <Button size="sm" onClick={() => setEditingDeadlineId(d.id)}>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            setEditingDeadlineId(d.id)
+                                                                        }}
+                                                                    >
                                                                         <Plus className="h-3.5 w-3.5 mr-1" />
                                                                         新增懲罰
                                                                     </Button>
@@ -229,13 +239,44 @@ function ContributionAnalytics() {
                                                                 <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
                                                                     <p className="text-sm font-medium">新增懲罰</p>
                                                                     <div className="grid grid-cols-3 gap-2">
-                                                                        <select value={selectedMemberId} onChange={(e) => setSelectedMemberId(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
-                                                                            <option value="">選擇成員</option>
-                                                                            {members.map((m) => (
-                                                                                <option key={m.id} value={m.id}>{m.display_name || m.name || m.id}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                        <input type="number" value={punishmentAmount} onChange={(e) => setPunishmentAmount(e.target.value)} placeholder="總資源量" className="rounded-md border px-2 py-1.5 text-sm" />
+                                                                        <div className="relative">
+                                                                            <Input
+                                                                                value={memberSearchQuery}
+                                                                                onChange={(e) => {
+                                                                                    setMemberSearchQuery(e.target.value)
+                                                                                    setSelectedMemberId('')
+                                                                                }}
+                                                                                placeholder="選擇成員"
+                                                                            />
+                                                                            {memberSearchQuery && registeredMembers && (
+                                                                                <div className="absolute z-10 w-full mt-1 max-h-48 overflow-auto bg-background border rounded-md shadow-lg">
+                                                                                    {registeredMembers
+                                                                                        .filter((m) => {
+                                                                                            const searchLower = memberSearchQuery.toLowerCase()
+                                                                                            const displayName = m.name || m.id
+                                                                                            return displayName.toLowerCase().includes(searchLower) || m.id.toLowerCase().includes(searchLower)
+                                                                                        })
+                                                                                        .map((m) => (
+                                                                                            <div
+                                                                                                key={m.id}
+                                                                                                className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                                                                                                onClick={(e) => {
+                                                                                                    setSelectedMemberId(m.id)
+                                                                                                    setMemberSearchQuery(m.name || m.id)
+                                                                                                }}
+                                                                                            >
+                                                                                                {m.name || m.id}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <Input
+                                                                            type="number"
+                                                                            value={punishmentAmount}
+                                                                            onChange={(e) => setPunishmentAmount(e.target.value)}
+                                                                            placeholder="總資源量"
+                                                                        />
                                                                         <div className="flex gap-1">
                                                                             <Button
                                                                                 size="sm"
@@ -252,6 +293,7 @@ function ContributionAnalytics() {
                                                                                             }, {
                                                                                                 onSuccess: () => {
                                                                                                     setSelectedMemberId('')
+                                                                                                    setMemberSearchQuery('')
                                                                                                     setPunishmentAmount('')
                                                                                                 }
                                                                                             })
@@ -267,6 +309,7 @@ function ContributionAnalytics() {
                                                                                 onClick={() => {
                                                                                     setEditingDeadlineId(null)
                                                                                     setSelectedMemberId('')
+                                                                                    setMemberSearchQuery('')
                                                                                     setPunishmentAmount('')
                                                                                 }}
                                                                             >
@@ -319,7 +362,8 @@ function ContributionAnalytics() {
                                                                             {d.type === 'penalty' &&
                                                                                 <TableCell className="text-right">
                                                                                     <button
-                                                                                        onClick={() => {
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation()
                                                                                             deleteTargetMutation.mutate({
                                                                                                 contributionId: d.id,
                                                                                                 memberId: m.id
