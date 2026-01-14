@@ -1,4 +1,4 @@
-import { ChevronDown, Gift, Calendar } from 'lucide-react'
+import { ChevronDown, Gift, Calendar, Trash2 } from 'lucide-react'
 import { StatusBadge, type StatusType } from './StatusBadge'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +24,7 @@ interface ContributionCardProps {
     readonly children?: React.ReactNode
     readonly isOpen?: boolean
     readonly onToggle?: () => void
+    readonly onDelete?: () => void
 }
 
 export function ContributionCard({
@@ -35,6 +36,7 @@ export function ContributionCard({
     children,
     isOpen = false,
     onToggle,
+    onDelete,
 }: ContributionCardProps) {
     const formatNumber = (num: number) => num.toLocaleString('zh-TW')
 
@@ -83,7 +85,21 @@ export function ContributionCard({
 
                 {/* Status and Chevron */}
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <StatusBadge status={status} />
+                    <div className="flex items-center gap-2">
+                        <StatusBadge status={status} />
+                        {onDelete && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    onDelete()
+                                }}
+                                className="text-muted-foreground hover:text-destructive transition-colors"
+                                aria-label="刪除活動"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
                     <div
                         className={`text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
                         aria-hidden

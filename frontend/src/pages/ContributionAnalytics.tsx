@@ -9,7 +9,7 @@ import { RoleGuard } from '@/components/alliance/RoleGuard'
 import { useSeasons } from '@/hooks/use-seasons'
 import { useAnalyticsMembers } from '@/hooks/use-analytics'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
-import { useContributions, useContributionDetail, useCreateContribution, useUpsertMemberTargetOverride, useDeleteMemberTargetOverride } from '@/hooks/use-contributions'
+import { useContributions, useContributionDetail, useCreateContribution, useUpsertMemberTargetOverride, useDeleteMemberTargetOverride, useDeleteContribution } from '@/hooks/use-contributions'
 import { ContributionCard } from '@/components/contributions/ContributionCard'
 import { ProgressBar } from '@/components/contributions/ProgressBar'
 import {
@@ -41,6 +41,7 @@ function ContributionAnalytics() {
     const createMutation = useCreateContribution(activeSeason?.alliance_id, activeSeason?.id)
     const upsertTargetMutation = useUpsertMemberTargetOverride()
     const deleteTargetMutation = useDeleteMemberTargetOverride()
+    const deleteContributionMutation = useDeleteContribution()
 
     // Track which contribution is expanded to fetch details
     const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -99,11 +100,17 @@ function ContributionAnalytics() {
             onSuccess: () => {
                 handleCloseDialog()
             },
-            onError: (error: Error) => {
+            onError: (error) => {
                 alert('新增失敗: ' + (error.message || '未知錯誤'))
             }
         })
     }, [newTitle, newType, newAmount, newDeadline, handleCloseDialog, createMutation])
+
+    const handleDelete = useCallback((id: string) => {
+        if (confirm('確定要刪除？所有相關資料將會被永久刪除。')) {
+            deleteContributionMutation.mutate(id)
+        }
+    }, [deleteContributionMutation])
 
 
 
@@ -204,6 +211,7 @@ function ContributionAnalytics() {
                                         contributions={contribMap}
                                         isOpen={expandedId === d.id}
                                         onToggle={() => handleCardClick(d.id, expandedId === d.id)}
+                                        onDelete={() => handleDelete(d.id)}
                                     >
                                         {/* Progress Bar */}
                                         {(total > 0 || targetTotal > 0) && (
