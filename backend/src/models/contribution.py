@@ -16,18 +16,30 @@ from pydantic import BaseModel, ConfigDict, Field
 class ContributionType(str, Enum):
     """Contribution event type"""
 
-    ALLIANCE = "alliance"  # 同盟捐獻 - unified target
-    PUNISHMENT = "punishment"  # 懲罰 - individual targets
+    REGULAR = "regular"  # 一般捐獻 - unified target
+    PENALTY = "penalty"  # 懲罰性捐獻 - individual targets
+
+
+class ContributionStatus(str, Enum):
+    """Contribution event status"""
+
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class ContributionBase(BaseModel):
     """Base contribution event model"""
 
     title: str = Field(..., min_length=1, max_length=100, description="Event title")
-    type: ContributionType = Field(..., description="Alliance or punishment type")
+    type: ContributionType = Field(..., description="Regular or penalty type")
+    description: str | None = Field(None, description="Event description")
     deadline: datetime = Field(..., description="Deadline datetime")
-    target_contribution: int = Field(
-        0, ge=0, description="Default target for all members (alliance type)"
+    target_amount: int = Field(
+        0, ge=0, description="Default target for all members (regular type)"
+    )
+    status: ContributionStatus = Field(
+        default=ContributionStatus.ACTIVE, description="Event status"
     )
 
 
@@ -45,10 +57,11 @@ class Contribution(ContributionBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    season_id: UUID
     alliance_id: UUID
-    created_at: datetime
+    season_id: UUID
     created_by: UUID | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class ContributionInfo(BaseModel):
@@ -56,7 +69,7 @@ class ContributionInfo(BaseModel):
 
     member_id: UUID = Field(..., description="Member UUID")
     member_name: str = Field(..., description="Member name")
-    contribution_target: int = Field(..., description="Target amount")
+    target_amount: int = Field(..., description="Target amount")
     contribution_made: int = Field(..., description="Actual contribution (diff)")
 
 
@@ -74,9 +87,13 @@ class ContributionTarget(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID | None = Field(None, description="Target override ID")
-    contribution_id: UUID = Field(..., description="Contribution event ID")
+    donation_event_id: UUID = Field(..., description="Donation event ID")
+    alliance_id: UUID = Field(..., description="Alliance ID")
     member_id: UUID = Field(..., description="Member UUID")
-    target_contribution: int = Field(..., ge=0, description="Override target amount")
+    target_amount: int = Field(..., ge=0, description="Override target amount")
     created_at: datetime | None = Field(
         default=None, description="Timestamp when override was created"
+    )
+    updated_at: datetime | None = Field(
+        default=None, description="Timestamp when override was updated"
     )

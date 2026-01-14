@@ -19,43 +19,44 @@ class ContributionTargetRepository(SupabaseRepository[ContributionTarget]):
 
     def __init__(self):
         """Initialize repository"""
-        super().__init__(table_name="contribution_targets", model_class=ContributionTarget)
+        super().__init__(table_name="donation_targets", model_class=ContributionTarget)
 
     async def upsert_target(
-        self, contribution_id: UUID, member_id: UUID, target_contribution: int
+        self, donation_event_id: UUID, alliance_id: UUID, member_id: UUID, target_amount: int
     ) -> ContributionTarget:
-        """Insert or update a member target override for a contribution"""
+        """Insert or update a member target override for a donation event"""
         payload = {
-            "contribution_id": str(contribution_id),
+            "donation_event_id": str(donation_event_id),
+            "alliance_id": str(alliance_id),
             "member_id": str(member_id),
-            "target_contribution": target_contribution,
+            "target_amount": target_amount,
         }
         result = await self._execute_async(
             lambda: self.client.from_(self.table_name)
-            .upsert(payload, on_conflict="contribution_id,member_id")
+            .upsert(payload, on_conflict="donation_event_id,member_id")
             .execute()
         )
         data = self._handle_supabase_result(result, expect_single=True)
         return self._build_model(data)
 
-    async def delete_target(self, contribution_id: UUID, member_id: UUID) -> None:
-        """Delete a member's target override for a contribution"""
+    async def delete_target(self, donation_event_id: UUID, member_id: UUID) -> None:
+        """Delete a member's target override for a donation event"""
         await self._execute_async(
             lambda: self.client
             .from_(self.table_name)
             .delete()
-            .eq("contribution_id", str(contribution_id))
+            .eq("donation_event_id", str(donation_event_id))
             .eq("member_id", str(member_id))
             .execute()
         )
 
-    async def get_by_contribution(self, contribution_id: UUID) -> list[ContributionTarget]:
-        """Fetch all member target overrides for a contribution"""
+    async def get_by_donation_event(self, donation_event_id: UUID) -> list[ContributionTarget]:
+        """Fetch all member target overrides for a donation event"""
         result = await self._execute_async(
             lambda: self.client
             .from_(self.table_name)
             .select("*")
-            .eq("contribution_id", str(contribution_id))
+            .eq("donation_event_id", str(donation_event_id))
             .execute()
         )
         data = self._handle_supabase_result(result, allow_empty=True)

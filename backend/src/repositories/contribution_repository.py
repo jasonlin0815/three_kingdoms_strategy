@@ -17,7 +17,7 @@ class ContributionRepository(SupabaseRepository[Contribution]):
 
     def __init__(self):
         """Initialize contribution repository"""
-        super().__init__(table_name="contributions", model_class=Contribution)
+        super().__init__(table_name="donation_events", model_class=Contribution)
 
     async def get_by_season(self, season_id: UUID) -> list[Contribution]:
         """

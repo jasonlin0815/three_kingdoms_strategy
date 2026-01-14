@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.models.contribution import ContributionType
+from src.models.contribution import ContributionStatus, ContributionType
 
 # ============================================================================
 # Request Schemas
@@ -25,11 +25,12 @@ class CreateContributionRequest(BaseModel):
     """Request body for creating a new contribution event"""
 
     title: str = Field(..., min_length=1, max_length=100, description="Event title")
-    type: ContributionType = Field(..., description="Alliance or punishment type")
+    type: ContributionType = Field(..., description="Regular or penalty type")
     deadline: datetime = Field(..., description="Deadline datetime")
-    target_contribution: int = Field(
-        0, ge=0, description="Default target for all members (alliance type)"
+    target_amount: int = Field(
+        0, ge=0, description="Default target for all members (regular type)"
     )
+    description: str | None = Field(None, description="Optional event description")
 
 
 # ============================================================================
@@ -48,9 +49,12 @@ class ContributionListResponse(BaseModel):
     title: str
     type: ContributionType
     deadline: datetime
-    target_contribution: int
+    target_amount: int
+    description: str | None
+    status: ContributionStatus
     created_at: datetime
     created_by: UUID | None
+    updated_at: datetime
 
 
 class ContributionInfoResponse(BaseModel):
@@ -58,7 +62,7 @@ class ContributionInfoResponse(BaseModel):
 
     member_id: UUID
     member_name: str
-    contribution_target: int
+    target_amount: int
     contribution_made: int
 
 
@@ -71,9 +75,12 @@ class ContributionDetailResponse(BaseModel):
     title: str
     type: ContributionType
     deadline: datetime
-    target_contribution: int
+    target_amount: int
+    description: str | None
+    status: ContributionStatus
     created_at: datetime
     created_by: UUID | None
+    updated_at: datetime
     contribution_info: list[ContributionInfoResponse]
 
 
@@ -81,6 +88,6 @@ class ContributionTargetOverrideRequest(BaseModel):
     """Request body for per-member target override"""
 
     member_id: UUID = Field(..., description="Member UUID")
-    target_contribution: int = Field(
+    target_amount: int = Field(
         ..., ge=0, description="Override target amount for the member"
     )

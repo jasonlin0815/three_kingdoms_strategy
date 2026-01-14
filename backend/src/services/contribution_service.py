@@ -20,8 +20,8 @@ from src.models.contribution import (
     ContributionCreate,
     ContributionInfo,
     ContributionTarget,
-    ContributionWithInfo,
     ContributionType,
+    ContributionWithInfo,
 )
 from src.repositories.contribution_repository import ContributionRepository
 from src.repositories.contribution_target_repository import ContributionTargetRepository
@@ -92,29 +92,29 @@ class ContributionService:
         return await self._contribution_repo.create(contribution_data)
 
     async def get_contribution_with_info(
-        self, contribution_id: UUID, target_contribution: int | None = None
+        self, contribution_id: UUID, target_amount: int | None = None
     ) -> ContributionWithInfo:
         """
         Get contribution event with member contribution info.
 
         Returns per-member data from the end snapshot:
-        - If type is ALLIANCE: target comes from stored `target_contribution`
-        - If type is PUNISHMENT: target comes from per-member overrides
+        - If type is REGULAR: target comes from stored `target_amount`
+        - If type is PENALTY: target comes from per-member overrides
 
         Args:
             contribution_id: Contribution UUID
-            target_contribution: Optional override for ALLIANCE type only; ignored for PUNISHMENT
+            target_amount: Optional override for REGULAR type only; ignored for PENALTY
 
         Returns:
             Contribution with member contribution details
         """
         contribution = await self._contribution_repo.get_by_id(contribution_id)
-        is_alliance = contribution.type == ContributionType.ALLIANCE
-        is_punishment = contribution.type == ContributionType.PUNISHMENT
+        is_regular = contribution.type == ContributionType.REGULAR
+        is_penalty = contribution.type == ContributionType.PENALTY
         effective_target = (
-            target_contribution
-            if (is_alliance and target_contribution is not None)
-            else contribution.target_contribution
+            target_amount
+            if (is_regular and target_amount is not None)
+            else contribution.target_amount
         )
 
         # Find snapshots closest to creation_time and deadline
@@ -132,37 +132,33 @@ class ContributionService:
                 **contribution.model_dump(), contribution_info=[]
             )
 
-        # Get member snapshots from both uploads
-        start_snapshots = await self._snapshot_repo.get_by_upload(start_upload.id)
+        # Get member snapshots from end upload
         end_snapshots = await self._snapshot_repo.get_by_upload(end_upload.id)
 
-        # Build lookup dictionaries
-        start_snapshot_map = {snap.member_id: snap for snap in start_snapshots}
+        # Build lookup dictionary for end snapshots
         end_snapshot_map = {snap.member_id: snap for snap in end_snapshots}
 
         # Calculate contributions for all members in end snapshot
         contribution_info_list: list[ContributionInfo] = []
 
-        # For punishment, load per-member target overrides
+        # For penalty, load per-member target overrides
         overrides_map: dict[UUID, int] = {}
-        if is_punishment:
-            overrides = await self._target_repo.get_by_contribution(contribution.id)
-            overrides_map = {ov.member_id: ov.target_contribution for ov in overrides}
+        if is_penalty:
+            overrides = await self._target_repo.get_by_donation_event(contribution.id)
+            overrides_map = {ov.member_id: ov.target_amount for ov in overrides}
 
         for member_id, end_snap in end_snapshot_map.items():
-            start_snap = start_snapshot_map.get(member_id)
-
             # Use the end snapshot total contribution
             end_total = end_snap.total_contribution
             # Determine target per type
             target_for_member = (
-                effective_target if is_alliance else overrides_map.get(member_id, 0)
+                effective_target if is_regular else overrides_map.get(member_id, 0)
             )
 
             contribution_info = ContributionInfo(
                 member_id=member_id,
                 member_name=end_snap.member_name,
-                contribution_target=target_for_member,
+                target_amount=target_for_member,
                 contribution_made=end_total,
             )
             contribution_info_list.append(contribution_info)
@@ -180,24 +176,24 @@ class ContributionService:
         self,
         contribution_id: UUID,
         member_id: UUID,
-        target_contribution: int,
+        target_amount: int,
         user_id: UUID,
     ) -> ContributionTarget:
         """Set or update a per-member contribution target override"""
         # Verify user has access via contribution's alliance
         contribution = await self._contribution_repo.get_by_id(contribution_id)
-        await self._permission_service.verify_alliance_access(
+        await self._permission_service.require_owner_or_collaborator(
             user_id, contribution.alliance_id
         )
 
         return await self._target_repo.upsert_target(
-            contribution_id, member_id, target_contribution
+            contribution_id, contribution.alliance_id, member_id, target_amount
         )
 
     async def delete_contribution(self, contribution_id: UUID, user_id: UUID) -> None:
         """Delete a contribution event after access check"""
         contribution = await self._contribution_repo.get_by_id(contribution_id)
-        await self._permission_service.verify_alliance_access(
+        await self._permission_service.require_owner_or_collaborator(
             user_id, contribution.alliance_id
         )
         await self._contribution_repo.delete(contribution_id)
@@ -207,7 +203,7 @@ class ContributionService:
     ) -> None:
         """Delete a member's target override after access check"""
         contribution = await self._contribution_repo.get_by_id(contribution_id)
-        await self._permission_service.verify_alliance_access(
+        await self._permission_service.require_owner_or_collaborator(
             user_id, contribution.alliance_id
         )
         await self._target_repo.delete_target(contribution_id, member_id)
