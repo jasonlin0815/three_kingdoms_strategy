@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -7,14 +7,10 @@ import { Label } from '@/components/ui/label'
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RoleGuard } from '@/components/alliance/RoleGuard'
 import { useSeasons } from '@/hooks/use-seasons'
-import { useAlliance } from '@/hooks/use-alliance'
-import { useContributions, useContributionDetail, useCreateContribution, useUpsertMemberTargetOverride, useDeleteMemberTargetOverride, useDeleteContribution, contributionKeys } from '@/hooks/use-contributions'
-import { useQueryClient } from '@tanstack/react-query'
-import { apiClient } from '@/lib/api-client'
-import { Plus, Trash2 } from 'lucide-react'
-import { nanoid } from 'nanoid'
+import { Plus } from 'lucide-react'
 
 import { useAnalyticsMembers } from '@/hooks/use-analytics'
+import { useContributions, useCreateContribution, useDeleteContribution } from '@/hooks/use-contributions'
 import { ContributionCard } from '@/components/contributions/ContributionCard'
 import {
     Dialog,
@@ -35,86 +31,29 @@ import {
 import { StatusType } from '@/components/contributions/StatusBadge'
 import { MemberListItem } from '@/types/analytics'
 
-type ContributionType = 'alliance' | 'punishment'
-
-function ContributionDetailTable({ contributionId, type, perPersonTarget }: { contributionId: string, type: ContributionType, perPersonTarget: number }) {
-    const { data: detail } = useContributionDetail(contributionId)
-    const deleteOverride = useDeleteMemberTargetOverride()
-
-    if (!detail) {
-        return <div className="py-2 text-center text-muted-foreground text-sm">載入中...</div>
-    }
-
-    const members = detail.contribution_info
-    const sorted = [...members].sort((a, b) => b.contribution_made - a.contribution_made)
-
-    return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>成員</TableHead>
-                    <TableHead className="text-right">已捐獻 / 目標</TableHead>
-                    <TableHead className="text-right">進度</TableHead>
-                    {type === 'punishment' && <TableHead className="text-right">操作</TableHead>}
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {sorted.map((m) => {
-                    const amount = m.contribution_made
-                    const target = type === 'alliance' ? perPersonTarget : m.contribution_target
-                    const pct = target > 0 ? Math.min(100, Math.round((amount / target) * 100)) : 0
-                    return (
-                        <TableRow key={m.member_id}>
-                            <TableCell className="font-medium">{m.member_name}</TableCell>
-                            <TableCell className="text-right tabular-nums text-muted-foreground">
-                                {amount.toLocaleString('zh-TW')} / {target.toLocaleString('zh-TW')}
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                    <div className="h-1.5 w-24 rounded-full bg-muted">
-                                        <div
-                                            className={pct >= 100 ? 'h-1.5 rounded-full bg-emerald-500 transition-all' : 'h-1.5 rounded-full bg-primary/70 transition-all'}
-                                            style={{ width: `${pct}%` }}
-                                        />
-                                    </div>
-                                    <span className="w-7 text-right text-xs font-medium tabular-nums">{pct}%</span>
-                                </div>
-                            </TableCell>
-                            {type === 'punishment' && (
-                                <TableCell className="text-right">
-                                    <button onClick={() => deleteOverride.mutate({ contributionId, memberId: m.member_id })} className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></button>
-                                </TableCell>
-                            )}
-                        </TableRow>
-                    )
-                })}
-            </TableBody>
-        </Table>
-    )
+interface ContributionDeadline {
+    id: string
+    title?: string
+    type?: 'regular' | 'penalty'
+    amount: number // per-member target
+    deadline: string // ISO date
+    contributions: Record<string, number> // member_id -> contributed amount
 }
 
 function ContributionAnalytics() {
     const { data: seasons } = useSeasons()
-    const { data: alliance } = useAlliance()
     const activeSeason = seasons?.find((s) => s.is_active)
-    const allianceId = alliance?.id
-    const seasonId = activeSeason?.id
-
-    const queryClient = useQueryClient()
-    const { data: contributions } = useContributions(allianceId, seasonId)
-    const createMutation = useCreateContribution(allianceId, seasonId)
-    const upsertOverride = useUpsertMemberTargetOverride()
-    const deleteContributionMutation = useDeleteContribution()
-    const deleteOverride = useDeleteMemberTargetOverride()
 
     // Members list (used to show who's completed)
     const { data: members } = useAnalyticsMembers(activeSeason?.id, true)
 
-    // Local UI state
-    const [dialogOpen, setDialogOpen] = useState(false)
+    // Local state for contribution deadlines (stored in-memory for skeleton)
+    const [deadlines, setDeadlines] = useState<ContributionDeadline[]>([])
 
+    // Dialog form state
+    const [dialogOpen, setDialogOpen] = useState(false)
     const [newTitle, setNewTitle] = useState('')
-    const [newType, setNewType] = useState<'alliance' | 'punish'>('alliance')
+    const [newType, setNewType] = useState<'regular' | 'penalty'>('regular')
     const [newAmount, setNewAmount] = useState('')
     const [newDeadline, setNewDeadline] = useState('')
 
@@ -129,7 +68,7 @@ function ContributionAnalytics() {
         const today = new Date().toISOString().slice(0, 10)
         setDialogOpen(true)
         setNewTitle('')
-        setNewType('alliance')
+        setNewType('regular')
         setNewAmount('')
         setNewDeadline(today)
     }, [])
@@ -137,25 +76,32 @@ function ContributionAnalytics() {
     const handleCloseDialog = useCallback(() => {
         setDialogOpen(false)
         setNewTitle('')
-        setNewType('alliance')
+        setNewType('regular')
         setNewAmount('')
         setNewDeadline('')
     }, [])
 
-    const handleAdd = useCallback(async () => {
+    const handleAdd = useCallback(() => {
         if (!newTitle) return alert('請輸入活動標題')
         const amount = Number(newAmount)
-        if (newType === 'alliance' && (Number.isNaN(amount) || amount <= 0)) return alert('請輸入每名成員的捐獻金額（大於 0）')
-        if (!allianceId || !seasonId) return
+        if (newType === 'regular' && (Number.isNaN(amount) || amount <= 0)) return alert('請輸入每名成員的捐獻金額（大於 0）')
 
-        await createMutation.mutateAsync({
+        const payload = {
+            id: nanoid(),
             title: newTitle,
-            type: newType === 'punish' ? 'punishment' : 'alliance',
+            type: newType,
+            amount: newType === 'regular' ? Number(newAmount) : 0,
             deadline: newDeadline,
-            target_contribution: newType === 'alliance' ? amount : 0,
-        })
+            contributions: {},
+        }
+
+        setDeadlines((prev) => [
+            ...prev,
+            payload
+        ].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()))
+
         handleCloseDialog()
-    }, [newTitle, newType, newAmount, newDeadline, allianceId, seasonId, createMutation, handleCloseDialog])
+    }, [newTitle, newType, newAmount, newDeadline, handleCloseDialog])
 
 
 
@@ -182,8 +128,8 @@ function ContributionAnalytics() {
                     </RoleGuard>
                 </div>
 
-                {/* Contributions List */}
-                {(contributions?.length ?? 0) === 0 ? (
+                {/* Deadlines List */}
+                {deadlines.length === 0 ? (
                     <Card>
                         <CardHeader className="flex items-center justify-between">
                             <div>
@@ -196,53 +142,58 @@ function ContributionAnalytics() {
                     </Card>
                 ) : (
                     <div className="space-y-4">
-                        {contributions?.map((c) => {
-                            const detail = queryClient.getQueryData<any>(contributionKeys.detail(c.id))
-                            const isExpired = new Date(c.deadline).getTime() < Date.now()
-                            const status: StatusType = isExpired ? 'expired' : 'in-progress';
-                            const tags = c.type === 'punishment'
-                                ? [{ id: 'punish', label: '懲罰' }]
-                                : [{ id: 'alliance', label: '捐獻' }]
-                            const total = detail ? detail.contribution_info.reduce((sum: number, m: any) => sum + m.contribution_made, 0) : 0
-                            const targetTotal = detail
-                                ? (c.type === 'alliance'
-                                    ? c.target_contribution * detail.contribution_info.length
-                                    : detail.contribution_info.reduce((sum: number, m: any) => sum + (m.contribution_target || 0), 0))
-                                : 0
-                            const perMemberTarget = c.type === 'alliance' ? c.target_contribution : 0
+                        {deadlines.map((d) => {
+                            const total = Object.values(d.contributions || {}).reduce((a, b) => a + b, 0)
+                            const memberCount = (members && members.length) || 1
+                            const targetTotal = d.amount * memberCount
+                            const isExpired = new Date(d.deadline).getTime() < Date.now()
+                            const status: StatusType = isExpired ? 'cancelled' : 'active';
+
+                            const tags = d.type === 'penalty'
+                                ? [{ id: 'penalty', label: '懲罰' }]
+                                : [{ id: 'regular', label: '捐獻' }]
+
+                            const contribMap = d.contributions || {}
+
+                            const perMemberTarget = d.amount || (memberCount > 0 ? Math.round(targetTotal / memberCount) : 0)
+
+                            // For regular: use all members; for penalty: use only members with contributions (local cache)
+                            const displayMembers = d.type === 'penalty'
+                                ? Object.keys(contribMap).map(memberId => members?.find((m: MemberListItem) => m.id === memberId)).filter(Boolean)
+                                : members
+
+                            const sortedMembers = displayMembers
+                                ? [...displayMembers].sort((a: any, b: any) => (contribMap[b.id] || 0) - (contribMap[a.id] || 0))
+                                : []
 
                             return (
                                 <ContributionCard
-                                    key={c.id}
-                                    title={c.title || `${new Date(c.deadline).toLocaleDateString()}捐獻`}
+                                    key={d.id}
+                                    title={d.title || `${new Date(d.deadline).toLocaleDateString()}捐獻`}
                                     tags={tags}
-                                    deadline={new Date(c.deadline).toLocaleDateString()}
+                                    deadline={new Date(d.deadline).toLocaleDateString()}
                                     currentAmount={total}
                                     targetAmount={targetTotal}
                                     status={status}
-                                    perPersonTarget={perMemberTarget}
-                                    onOpen={() => queryClient.prefetchQuery({ queryKey: contributionKeys.detail(c.id), queryFn: () => apiClient.getContributionDetail(c.id) })}
+                                    perPersonTarget={d.amount}
+                                    members={members}
+                                    contributions={d.contributions}
                                 >
                                     <div className="space-y-4">
                                         <div className="space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                {c.type === 'alliance' && <p className="text-sm font-medium">成員捐獻進度</p>}
-                                                <RoleGuard requiredRoles={["owner", "collaborator"]}>
-                                                    <Button size="sm" variant="destructive" onClick={() => deleteContributionMutation.mutate(c.id)}>刪除活動</Button>
-                                                </RoleGuard>
-                                            </div>
+                                            {d.type === 'regular' && <p className="text-sm font-medium">成員捐獻進度</p>}
 
-                                            {c.type === 'punishment' && (
+                                            {d.type === 'penalty' && (
                                                 <>
                                                     <div className="flex items-center justify-between">
-                                                        {editingDeadlineId !== c.id && (
-                                                            <Button size="sm" onClick={() => setEditingDeadlineId(c.id)}>
+                                                        {editingDeadlineId !== d.id && (
+                                                            <Button size="sm" onClick={() => setEditingDeadlineId(d.id)}>
                                                                 <Plus className="h-3.5 w-3.5 mr-1" />
                                                                 新增懲罰
                                                             </Button>
                                                         )}
                                                     </div>
-                                                    {editingDeadlineId === c.id && (
+                                                    {editingDeadlineId === d.id && (
                                                         <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
                                                             <p className="text-sm font-medium">新增懲罰</p>
                                                             <div className="grid grid-cols-3 gap-2">
@@ -256,12 +207,27 @@ function ContributionAnalytics() {
                                                                 <div className="flex gap-1">
                                                                     <Button
                                                                         size="sm"
-                                                                        onClick={async () => {
-                                                                            const amount = Number(punishmentAmount)
-                                                                            if (!selectedMemberId || Number.isNaN(amount) || amount <= 0) return
-                                                                            await upsertOverride.mutateAsync({ contributionId: c.id, payload: { member_id: selectedMemberId, target_contribution: amount } })
-                                                                            setSelectedMemberId('')
-                                                                            setPunishmentAmount('')
+                                                                        onClick={() => {
+                                                                            if (selectedMemberId && punishmentAmount) {
+                                                                                const amount = Number(punishmentAmount)
+                                                                                if (amount > 0) {
+                                                                                    setDeadlines((prev) =>
+                                                                                        prev.map((deadline) =>
+                                                                                            deadline.id === d.id
+                                                                                                ? {
+                                                                                                    ...deadline,
+                                                                                                    contributions: {
+                                                                                                        ...deadline.contributions,
+                                                                                                        [selectedMemberId]: amount,
+                                                                                                    },
+                                                                                                }
+                                                                                                : deadline
+                                                                                        )
+                                                                                    )
+                                                                                    setSelectedMemberId('')
+                                                                                    setPunishmentAmount('')
+                                                                                }
+                                                                            }
                                                                         }}
                                                                     >
                                                                         新增
@@ -286,8 +252,53 @@ function ContributionAnalytics() {
 
                                             {members == null ? (
                                                 <div className="py-2 text-center text-muted-foreground text-sm">載入中...</div>
+                                            ) : sortedMembers.length === 0 ? (
+                                                <div className="text-sm text-muted-foreground">
+                                                    {d.type === 'penalty' ? '尚無懲罰記錄' : '尚無成員'}
+                                                </div>
                                             ) : (
-                                                <ContributionDetailTable contributionId={c.id} type={c.type} perPersonTarget={perMemberTarget} />
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>成員</TableHead>
+                                                            <TableHead className="text-right">已捐獻 / 目標</TableHead>
+                                                            <TableHead className="text-right">進度</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {sortedMembers.map((m: any) => {
+                                                            const amount = contribMap[m.id] || 0
+                                                            const pct = perMemberTarget > 0
+                                                                ? Math.min(100, Math.round((amount / perMemberTarget) * 100))
+                                                                : 0
+                                                            return (
+                                                                <TableRow key={m.id}>
+                                                                    <TableCell className="font-medium">{m.display_name || m.name || m.id}</TableCell>
+                                                                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                                                                        {amount.toLocaleString('zh-TW')} / {perMemberTarget.toLocaleString('zh-TW')}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            <div className="h-1.5 w-24 rounded-full bg-muted">
+                                                                                <div
+                                                                                    className={pct >= 100 ? 'h-1.5 rounded-full bg-emerald-500 transition-all' : 'h-1.5 rounded-full bg-primary/70 transition-all'}
+                                                                                    style={{ width: `${pct}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <span className="w-7 text-right text-xs font-medium tabular-nums">{pct}%</span>
+                                                                        </div>
+                                                                    </TableCell>
+
+                                                                    {d.type === 'penalty' &&
+                                                                        <TableCell className="text-right">
+                                                                            <button onClick={() => { setDeadlines((prev) => prev.map((deadline) => deadline.id === d.id ? { ...deadline, contributions: Object.fromEntries(Object.entries(deadline.contributions || {}).filter(([id]) => id !== m.id)) } : deadline)) }} className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></button>
+                                                                        </TableCell>
+                                                                    }
+                                                                </TableRow>
+                                                            )
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
                                             )}
                                         </div>
                                     </div>
@@ -315,13 +326,13 @@ function ContributionAnalytics() {
                                 <Label htmlFor="dialog-type">活動類型</Label>
                                 <div>
                                     <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as any)} className="w-full rounded-md border px-3 py-2">
-                                        <option value="alliance">同盟捐献</option>
-                                        <option value="punish">懲罰</option>
+                                        <option value="regular">同盟捐献</option>
+                                        <option value="penalty">懲罰</option>
                                     </select>
                                 </div>
                             </div>
 
-                            {newType === 'alliance' ? (
+                            {newType === 'regular' ? (
                                 <div className="space-y-2">
                                     <Label htmlFor="dialog-amount">每名成員捐獻資源總量</Label>
                                     <Input id="dialog-amount" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="例如：20000" type="number" />

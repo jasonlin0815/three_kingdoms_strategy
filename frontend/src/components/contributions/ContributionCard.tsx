@@ -26,7 +26,6 @@ interface ContributionCardProps {
     members?: MemberLike[] | null
     contributions?: Record<string, number>
     children?: React.ReactNode
-    onOpen?: () => void
 }
 
 export function ContributionCard({
@@ -38,7 +37,6 @@ export function ContributionCard({
     status,
     perPersonTarget,
     children,
-    onOpen,
 }: ContributionCardProps) {
     const [isOpen, setIsOpen] = useState(false)
 
@@ -48,11 +46,7 @@ export function ContributionCard({
     return (
         <div className={cn('overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-shadow hover:shadow-md', isOpen && 'shadow-md')}>
             <button
-                onClick={() => {
-                    const next = !isOpen
-                    setIsOpen(next)
-                    if (next) onOpen?.()
-                }}
+                onClick={() => setIsOpen(!isOpen)}
                 className="flex w-full items-start gap-4 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
                 {/* Icon */}

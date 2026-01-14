@@ -1,6 +1,6 @@
 import { axiosInstance } from './base-client'
 
-export type ContributionType = 'alliance' | 'punishment'
+export type ContributionType = 'regular' | 'penalty'
 
 export interface ContributionListItem {
   id: string
