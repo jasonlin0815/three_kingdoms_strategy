@@ -23,7 +23,7 @@ export * from './upload-api'
 export * from './hegemony-api'
 export * from './analytics-api'
 export * from './event-api'
-export * from './contribution-api'
+export * from './donation-api'
 export * from './line-api'
 export * from './copper-mine-api'
 
@@ -35,7 +35,7 @@ import * as uploadApi from './upload-api'
 import * as hegemonyApi from './hegemony-api'
 import * as analyticsApi from './analytics-api'
 import * as eventApi from './event-api'
-import * as contributionApi from './contribution-api'
+import * as donationApi from './donation-api'
 import * as lineApi from './line-api'
 import * as copperMineApi from './copper-mine-api'
 
@@ -112,13 +112,13 @@ export const apiClient = {
   processEvent: eventApi.processEvent,
   deleteEvent: eventApi.deleteEvent,
 
-  // Contribution
-  getContributions: contributionApi.getContributions,
-  getContributionDetail: contributionApi.getContributionDetail,
-  createContribution: contributionApi.createContribution,
-  deleteContribution: contributionApi.deleteContribution,
-  upsertMemberTargetOverride: contributionApi.upsertMemberTargetOverride,
-  deleteMemberTargetOverride: contributionApi.deleteMemberTargetOverride,
+  // Donation
+  getDonations: donationApi.getDonations,
+  getDonationDetail: donationApi.getDonationDetail,
+  createDonation: donationApi.createDonation,
+  deleteDonation: donationApi.deleteDonation,
+  upsertMemberTargetOverride: donationApi.upsertMemberTargetOverride,
+  deleteMemberTargetOverride: donationApi.deleteMemberTargetOverride,
 
   // LINE Binding
   getLineBindingStatus: lineApi.getLineBindingStatus,

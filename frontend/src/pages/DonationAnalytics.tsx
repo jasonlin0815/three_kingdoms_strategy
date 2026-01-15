@@ -1,17 +1,12 @@
-import { useCallback, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState } from 'react'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { AllianceGuard } from '@/components/alliance/AllianceGuard'
 import { RoleGuard } from '@/components/alliance/RoleGuard'
-import { useSeasons } from '@/hooks/use-seasons'
-import { useAnalyticsMembers } from '@/hooks/use-analytics'
-import { Plus, Trash2, Loader2 } from 'lucide-react'
-import { useContributions, useContributionDetail, useCreateContribution, useUpsertMemberTargetOverride, useDeleteMemberTargetOverride, useDeleteContribution } from '@/hooks/use-contributions'
-import { ContributionCard } from '@/components/contributions/ContributionCard'
-import { ProgressBar } from '@/components/contributions/ProgressBar'
+import { DonationCard } from '@/components/donations/DonationCard'
+import { ProgressBar } from '@/components/donations/ProgressBar'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
     Dialog,
     DialogContent,
@@ -20,6 +15,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
     Table,
     TableBody,
@@ -28,64 +25,66 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
+import { useAnalyticsMembers } from '@/hooks/use-analytics'
+import {
+    useCreateDonation,
+    useDeleteDonation,
+    useDeleteMemberTargetOverride,
+    useDonationDetail,
+    useDonations,
+    useUpsertMemberTargetOverride,
+} from '@/hooks/use-donations'
+import { useSeasons } from '@/hooks/use-seasons'
+import type { DonationType } from '@/lib/api/donation-api'
 
-function ContributionAnalytics() {
+function DonationAnalytics() {
     const { data: seasons } = useSeasons()
     const activeSeason = seasons?.find((s) => s.is_active)
 
-    // Fetch all alliance members for autocomplete
     const { data: registeredMembers } = useAnalyticsMembers(activeSeason?.id, true)
 
-    // Fetch contributions from backend
-    const { data: contributions, isLoading } = useContributions(activeSeason?.alliance_id, activeSeason?.id)
-    const createMutation = useCreateContribution(activeSeason?.alliance_id, activeSeason?.id)
+    const { data: donations, isLoading } = useDonations(activeSeason?.alliance_id, activeSeason?.id)
+    const createMutation = useCreateDonation(activeSeason?.alliance_id, activeSeason?.id)
     const upsertTargetMutation = useUpsertMemberTargetOverride()
     const deleteTargetMutation = useDeleteMemberTargetOverride()
-    const deleteContributionMutation = useDeleteContribution()
+    const deleteDonationMutation = useDeleteDonation()
 
-    // Track which contribution is expanded to fetch details
     const [expandedId, setExpandedId] = useState<string | null>(null)
-    const { data: expandedDetail, isLoading: isDetailLoading } = useContributionDetail(expandedId || undefined)
+    const { data: expandedDetail, isLoading: isDetailLoading } = useDonationDetail(expandedId || undefined)
 
-    // Wrapper to handle card click - set expanded ID to trigger detail fetch
     const handleCardClick = (id: string, currentlyOpen: boolean) => {
         setExpandedId(currentlyOpen ? null : id)
     }
 
-    // Dialog form state
     const [dialogOpen, setDialogOpen] = useState(false)
     const [newTitle, setNewTitle] = useState('')
-    type ContributionType = 'regular' | 'penalty'
-    const [newType, setNewType] = useState<ContributionType>('regular')
+    const [newType, setNewType] = useState<DonationType>('regular')
     const [newAmount, setNewAmount] = useState('')
     const [newDeadline, setNewDeadline] = useState('')
 
-    // Penalty editing state
     const [editingDeadlineId, setEditingDeadlineId] = useState<string | null>(null)
     const [selectedMemberId, setSelectedMemberId] = useState('')
     const [memberSearchQuery, setMemberSearchQuery] = useState('')
     const [punishmentAmount, setPunishmentAmount] = useState('')
 
-
-    // Handlers
-    const handleOpenDialog = useCallback(() => {
+    const handleOpenDialog = () => {
         const today = new Date().toISOString().slice(0, 10)
         setDialogOpen(true)
         setNewTitle('')
         setNewType('regular')
         setNewAmount('')
         setNewDeadline(today)
-    }, [])
+    }
 
-    const handleCloseDialog = useCallback(() => {
+    const handleCloseDialog = () => {
         setDialogOpen(false)
         setNewTitle('')
         setNewType('regular')
         setNewAmount('')
         setNewDeadline('')
-    }, [])
+    }
 
-    const handleAdd = useCallback(() => {
+    const handleAdd = () => {
         if (!newTitle) return alert('請輸入活動標題')
         const amount = Number(newAmount)
         if (newType === 'regular' && (Number.isNaN(amount) || amount <= 0)) return alert('請輸入每名成員的捐獻金額（大於 0）')
@@ -104,15 +103,13 @@ function ContributionAnalytics() {
                 alert('新增失敗: ' + (error.message || '未知錯誤'))
             }
         })
-    }, [newTitle, newType, newAmount, newDeadline, handleCloseDialog, createMutation])
+    }
 
-    const handleDelete = useCallback((id: string) => {
+    const handleDelete = (id: string) => {
         if (confirm('確定要刪除？所有相關資料將會被永久刪除。')) {
-            deleteContributionMutation.mutate(id)
+            deleteDonationMutation.mutate(id)
         }
-    }, [deleteContributionMutation])
-
-
+    }
 
     return (
         <AllianceGuard>
@@ -137,14 +134,14 @@ function ContributionAnalytics() {
                     </RoleGuard>
                 </div>
 
-                {/* Contributions List */}
+                {/* Donations List */}
                 {isLoading ? (
                     <Card>
                         <CardContent className="py-8">
                             <div className="text-sm text-muted-foreground text-center">載入中...</div>
                         </CardContent>
                     </Card>
-                ) : !contributions || contributions.length === 0 ? (
+                ) : !donations || donations.length === 0 ? (
                     <Card>
                         <CardHeader className="flex items-center justify-between">
                             <div>
@@ -157,38 +154,34 @@ function ContributionAnalytics() {
                     </Card>
                 ) : (
                     <div className="space-y-4">
-                        {contributions.map((d) => {
+                        {donations.map((d) => {
                             const tags = d.type === 'penalty'
                                 ? [{ id: 'penalty', label: '懲罰' }]
                                 : [{ id: 'regular', label: '捐獻' }]
 
-                            // Get detailed info if this contribution is expanded
                             const detail = expandedId === d.id ? expandedDetail : null
-                            const contribMap: Record<string, number> = {}
+                            const donationMap: Record<string, number> = {}
                             const targetMap: Record<string, number> = {}
                             let total = 0
                             let targetTotal = 0
 
-                            if (detail?.contribution_info) {
-                                detail.contribution_info.forEach(info => {
-                                    contribMap[info.member_id] = info.contribution_made
+                            if (detail?.member_info) {
+                                detail.member_info.forEach(info => {
+                                    donationMap[info.member_id] = info.donated_amount
                                     targetMap[info.member_id] = info.target_amount
-                                    total += info.contribution_made
+                                    total += info.donated_amount
                                     targetTotal += info.target_amount
                                 })
                             }
 
-                            // Build members list from contribution detail
-                            const members = detail?.contribution_info?.map(info => ({
+                            const members = detail?.member_info?.map(info => ({
                                 id: info.member_id,
                                 display_name: info.member_name,
                                 name: info.member_name,
                             })) || []
 
-                            // Sort members by contribution
-                            const sortedMembers = [...members].sort((a, b) => (contribMap[b.id] || 0) - (contribMap[a.id] || 0))
+                            const sortedMembers = [...members].sort((a, b) => (donationMap[b.id] || 0) - (donationMap[a.id] || 0))
 
-                            // Determine status based on deadline and backend status
                             const deadlineDate = new Date(d.deadline)
                             const today = new Date()
                             today.setHours(0, 0, 0, 0)
@@ -201,14 +194,12 @@ function ContributionAnalytics() {
 
                             return (
                                 <div key={d.id}>
-                                    <ContributionCard
+                                    <DonationCard
                                         title={d.title}
                                         tags={tags}
                                         deadline={new Date(d.deadline).toLocaleDateString()}
                                         status={displayStatus}
                                         perPersonTarget={d.type === 'regular' ? d.target_amount : undefined}
-                                        members={members}
-                                        contributions={contribMap}
                                         isOpen={expandedId === d.id}
                                         onToggle={() => handleCardClick(d.id, expandedId === d.id)}
                                         onDelete={() => handleDelete(d.id)}
@@ -296,7 +287,7 @@ function ContributionAnalytics() {
                                                                                         const amount = Number(punishmentAmount)
                                                                                         if (amount > 0) {
                                                                                             upsertTargetMutation.mutate({
-                                                                                                contributionId: d.id,
+                                                                                                donationId: d.id,
                                                                                                 payload: {
                                                                                                     member_id: selectedMemberId,
                                                                                                     target_amount: amount,
@@ -348,7 +339,7 @@ function ContributionAnalytics() {
                                                             </TableHeader>
                                                             <TableBody>
                                                                 {sortedMembers.map((m) => {
-                                                                    const amount = contribMap[m.id] || 0
+                                                                    const amount = donationMap[m.id] || 0
                                                                     const memberTarget = d.type === 'penalty'
                                                                         ? (targetMap[m.id] || 0)
                                                                         : d.target_amount
@@ -379,7 +370,7 @@ function ContributionAnalytics() {
                                                                                         onClick={(e) => {
                                                                                             e.stopPropagation()
                                                                                             deleteTargetMutation.mutate({
-                                                                                                contributionId: d.id,
+                                                                                                donationId: d.id,
                                                                                                 memberId: m.id
                                                                                             })
                                                                                         }}
@@ -398,7 +389,7 @@ function ContributionAnalytics() {
                                                 </div>
                                             </div>
                                         )}
-                                    </ContributionCard>
+                                    </DonationCard>
                                 </div>
                             )
                         })}
@@ -422,7 +413,7 @@ function ContributionAnalytics() {
                             <div className="space-y-2">
                                 <Label htmlFor="dialog-type">活動類型</Label>
                                 <div>
-                                    <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as ContributionType)} className="w-full rounded-md border px-3 py-2">
+                                    <select id="dialog-type" value={newType} onChange={(e) => setNewType(e.target.value as DonationType)} className="w-full rounded-md border px-3 py-2">
                                         <option value="regular">同盟捐献</option>
                                         <option value="penalty">懲罰</option>
                                     </select>
@@ -456,4 +447,4 @@ function ContributionAnalytics() {
     )
 }
 
-export { ContributionAnalytics }
+export { DonationAnalytics }

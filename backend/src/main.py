@@ -15,8 +15,8 @@ from src.api.v1.endpoints import (
     alliance_collaborators,
     alliances,
     analytics,
-    contributions,
     copper_mines,
+    donations,
     events,
     hegemony_weights,
     linebot,
@@ -56,7 +56,7 @@ app.include_router(hegemony_weights.router, prefix="/api/v1")
 app.include_router(periods.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
-app.include_router(contributions.router, prefix="/api/v1")
+app.include_router(donations.router, prefix="/api/v1")
 app.include_router(copper_mines.router, prefix="/api/v1")
 app.include_router(linebot.router, prefix="/api/v1")
 

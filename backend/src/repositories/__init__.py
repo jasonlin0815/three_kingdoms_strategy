@@ -7,9 +7,9 @@ Export all repositories for easy import
 from src.repositories.alliance_repository import AllianceRepository
 from src.repositories.battle_event_metrics_repository import BattleEventMetricsRepository
 from src.repositories.battle_event_repository import BattleEventRepository
-from src.repositories.contribution_repository import ContributionRepository
-from src.repositories.contribution_target_repository import ContributionTargetRepository
 from src.repositories.csv_upload_repository import CsvUploadRepository
+from src.repositories.donation_repository import DonationRepository
+from src.repositories.donation_target_repository import DonationTargetRepository
 from src.repositories.member_period_metrics_repository import MemberPeriodMetricsRepository
 from src.repositories.member_repository import MemberRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
@@ -20,8 +20,8 @@ __all__ = [
     "AllianceRepository",
     "BattleEventRepository",
     "BattleEventMetricsRepository",
-    "ContributionRepository",
-    "ContributionTargetRepository",
+    "DonationRepository",
+    "DonationTargetRepository",
     "SeasonRepository",
     "CsvUploadRepository",
     "MemberRepository",

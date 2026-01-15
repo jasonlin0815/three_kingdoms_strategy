@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 
 export type StatusType = 'active' | 'completed' | 'cancelled'
 
-export function StatusBadge({ status }: { status: StatusType }) {
+export function StatusBadge({ status }: { readonly status: StatusType }) {
     if (status === 'completed') {
         return (
             <Badge className="text-xs bg-gray-500 text-white">完成</Badge>

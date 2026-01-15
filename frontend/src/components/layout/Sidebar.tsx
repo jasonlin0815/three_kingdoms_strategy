@@ -50,7 +50,7 @@ const navigation: readonly NavigationEntry[] = [
   },
   {
     name: '捐獻管理',
-    href: '/contributions',
+    href: '/donations',
     icon: Coins,
   },
   {

@@ -1,33 +1,25 @@
-import { ChevronDown, Gift, Calendar, Trash2 } from 'lucide-react'
+import { Calendar, ChevronDown, Gift, Trash2 } from 'lucide-react'
 import { StatusBadge, type StatusType } from './StatusBadge'
 import { cn } from '@/lib/utils'
-
-interface MemberLike {
-    readonly id: string
-    readonly name?: string
-    readonly display_name?: string
-}
 
 interface Tag {
     readonly id: string
     readonly label: string
 }
 
-interface ContributionCardProps {
+interface DonationCardProps {
     readonly title: string
     readonly tags: Tag[]
     readonly deadline: string
     readonly status: StatusType
     readonly perPersonTarget?: number
-    readonly members?: MemberLike[] | null
-    readonly contributions?: Record<string, number>
     readonly children?: React.ReactNode
     readonly isOpen?: boolean
     readonly onToggle?: () => void
     readonly onDelete?: () => void
 }
 
-export function ContributionCard({
+export function DonationCard({
     title,
     tags,
     deadline,
@@ -37,9 +29,8 @@ export function ContributionCard({
     isOpen = false,
     onToggle,
     onDelete,
-}: ContributionCardProps) {
+}: DonationCardProps) {
     const formatNumber = (num: number) => num.toLocaleString('zh-TW')
-
 
     return (
         <div className={cn('overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-shadow hover:shadow-md', isOpen && 'shadow-md')}>

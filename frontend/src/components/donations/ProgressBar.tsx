@@ -1,15 +1,10 @@
-import { useMemo } from 'react'
-
 interface ProgressBarProps {
-    current: number
-    total: number
+    readonly current: number
+    readonly total: number
 }
 
 export function ProgressBar({ current, total }: ProgressBarProps) {
-    const pct = useMemo(() => {
-        if (total <= 0) return 0
-        return Math.min(100, Math.round((current / total) * 100))
-    }, [current, total])
+    const pct = total <= 0 ? 0 : Math.min(100, Math.round((current / total) * 100))
 
     return (
         <div>
