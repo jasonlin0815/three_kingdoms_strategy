@@ -591,8 +591,11 @@ class LineBindingService:
         )
 
     # =========================================================================
-    # LIFF Notification Operations (Webhook - 每用戶每群組只通知一次)
+    # LIFF Notification Operations (Webhook - 3 分鐘 CD 機制)
     # =========================================================================
+
+    # Cooldown period for LIFF notifications (in minutes)
+    NOTIFICATION_COOLDOWN_MINUTES = 3
 
     async def should_send_liff_notification(
         self,
@@ -605,7 +608,7 @@ class LineBindingService:
         Conditions for sending:
         1. Group is bound to an alliance
         2. User has NOT registered any game ID
-        3. User has NOT been notified before in this group
+        3. User has NOT been notified within the cooldown period (3 minutes)
 
         Args:
             line_group_id: LINE group ID
@@ -629,10 +632,14 @@ class LineBindingService:
         if is_registered:
             return False
 
-        # Check if user has been notified before
-        has_been_notified = await self.repository.has_user_been_notified(
+        # Check if user has been notified within cooldown period
+        cooldown_threshold = datetime.now(UTC) - timedelta(
+            minutes=self.NOTIFICATION_COOLDOWN_MINUTES
+        )
+        has_been_notified = await self.repository.has_user_been_notified_since(
             line_group_id=line_group_id,
-            line_user_id=line_user_id
+            line_user_id=line_user_id,
+            since=cooldown_threshold
         )
         if has_been_notified:
             return False
@@ -645,7 +652,7 @@ class LineBindingService:
         line_user_id: str
     ) -> None:
         """
-        Record that user has been notified in this group
+        Record that user has been notified in this group (updates timestamp for CD)
 
         Args:
             line_group_id: LINE group ID

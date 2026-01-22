@@ -934,71 +934,21 @@ async def _handle_bind_command(
 
 
 async def _send_bind_success_message(reply_token: str, liff_url: str) -> None:
-    """發送綁定成功訊息（Flex Message）"""
-    line_bot = get_line_bot_api()
-    if not line_bot:
-        return
+    """發送綁定成功訊息（Flex Message - 熱血戰場風）"""
+    from src.lib.line_flex_builder import build_liff_entry_flex
 
-    try:
-        from linebot.v3.messaging import (
-            FlexBox,
-            FlexBubble,
-            FlexButton,
-            FlexMessage,
-            FlexSeparator,
-            FlexText,
-            ReplyMessageRequest,
-            URIAction,
-        )
+    flex_message = build_liff_entry_flex(
+        title="🏰 同盟連結成功！",
+        subtitle="各位盟友，點擊登記名號！",
+        button_label="立即登記",
+        liff_url=liff_url,
+        alt_text="🏰 同盟連結成功！點擊登記名號",
+        title_color="#1DB446",
+        button_color="#1DB446",
+        show_separator=True,
+    )
 
-        bubble = FlexBubble(
-            body=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexText(
-                        text="✅ 綁定成功！",
-                        weight="bold",
-                        size="xl",
-                        color="#1DB446",
-                    ),
-                    FlexSeparator(margin="lg"),
-                    FlexText(
-                        text="各位盟友，請點擊下方按鈕",
-                        size="md",
-                        margin="lg",
-                    ),
-                    FlexText(
-                        text="開始使用同盟管理功能！",
-                        size="md",
-                    ),
-                ],
-            ),
-            footer=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexButton(
-                        action=URIAction(
-                            label="開始使用",
-                            uri=liff_url,
-                        ),
-                        style="primary",
-                        color="#1DB446",
-                    ),
-                ],
-            ),
-        )
-
-        line_bot.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[FlexMessage(
-                    alt_text="✅ 綁定成功！點擊開始使用",
-                    contents=bubble,
-                )],
-            )
-        )
-    except Exception as e:
-        logger.error(f"Failed to send bind success message: {e}")
+    await _send_flex_message(reply_token, flex_message)
 
 
 async def _send_liff_entry(
@@ -1006,132 +956,43 @@ async def _send_liff_entry(
     reply_token: str,
     settings: Settings,
 ) -> None:
-    """發送 LIFF 入口（被 @ 時）"""
+    """發送 LIFF 入口（被 @ 時 - 熱血戰場風）"""
+    from src.lib.line_flex_builder import build_liff_entry_flex
+
     if not settings.liff_id:
         await _reply_text(reply_token, "💡 功能開發中～")
         return
 
     liff_url = create_liff_url(settings.liff_id, line_group_id)
-    line_bot = get_line_bot_api()
 
-    if not line_bot:
-        await _reply_text(reply_token, f"📱 點擊開始使用：\n{liff_url}")
+    flex_message = build_liff_entry_flex(
+        title="⚔️ 軍情速報",
+        subtitle="戰績、銅礦、排名一手掌握",
+        button_label="查看軍情",
+        liff_url=liff_url,
+        alt_text="⚔️ 點擊查看軍情",
+    )
+
+    if not flex_message:
+        await _reply_text(reply_token, f"⚔️ 點擊查看軍情：\n{liff_url}")
         return
 
-    try:
-        from linebot.v3.messaging import (
-            FlexBox,
-            FlexBubble,
-            FlexButton,
-            FlexMessage,
-            FlexText,
-            ReplyMessageRequest,
-            URIAction,
-        )
-
-        bubble = FlexBubble(
-            body=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexText(
-                        text="📱 三國小幫手",
-                        weight="bold",
-                        size="lg",
-                    ),
-                    FlexText(
-                        text="查看表現、註冊帳號、管理銅礦",
-                        size="sm",
-                        color="#666666",
-                        margin="md",
-                    ),
-                ],
-            ),
-            footer=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexButton(
-                        action=URIAction(
-                            label="開啟",
-                            uri=liff_url,
-                        ),
-                        style="primary",
-                    ),
-                ],
-            ),
-        )
-
-        line_bot.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[FlexMessage(
-                    alt_text="📱 點擊開始使用",
-                    contents=bubble,
-                )],
-            )
-        )
-    except Exception as e:
-        logger.error(f"Failed to send LIFF entry: {e}")
+    await _send_flex_message(reply_token, flex_message)
 
 
 async def _send_liff_welcome(reply_token: str, liff_url: str) -> None:
-    """發送新成員歡迎訊息"""
-    line_bot = get_line_bot_api()
-    if not line_bot:
-        return
+    """發送新成員歡迎訊息（熱血戰場風）"""
+    from src.lib.line_flex_builder import build_liff_entry_flex
 
-    try:
-        from linebot.v3.messaging import (
-            FlexBox,
-            FlexBubble,
-            FlexButton,
-            FlexMessage,
-            FlexText,
-            ReplyMessageRequest,
-            URIAction,
-        )
+    flex_message = build_liff_entry_flex(
+        title="🔥 盟友來了！",
+        subtitle="同盟歡迎你，點擊綁定ID！",
+        button_label="加入戰鬥",
+        liff_url=liff_url,
+        alt_text="🔥 盟友來了！點擊加入戰鬥",
+    )
 
-        bubble = FlexBubble(
-            body=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexText(
-                        text="👋 歡迎加入！",
-                        weight="bold",
-                        size="lg",
-                    ),
-                    FlexText(
-                        text="點擊下方按鈕開始使用～",
-                        size="sm",
-                        color="#666666",
-                        margin="md",
-                    ),
-                ],
-            ),
-            footer=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexButton(
-                        action=URIAction(
-                            label="開始使用",
-                            uri=liff_url,
-                        ),
-                        style="primary",
-                    ),
-                ],
-            ),
-        )
-
-        line_bot.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[FlexMessage(
-                    alt_text="👋 歡迎加入！點擊開始使用",
-                    contents=bubble,
-                )],
-            )
-        )
-    except Exception as e:
-        logger.error(f"Failed to send welcome message: {e}")
+    await _send_flex_message(reply_token, flex_message)
 
 
 async def _send_liff_first_message_reminder(
@@ -1139,17 +1000,50 @@ async def _send_liff_first_message_reminder(
     reply_token: str,
     settings: Settings,
 ) -> None:
-    """發送首次發言提醒（輕量版）"""
+    """發送首次發言提醒（熱血戰場風 - 3 分鐘 CD）"""
+    from src.lib.line_flex_builder import build_liff_entry_flex
+
     if not settings.liff_id:
         return
 
     liff_url = create_liff_url(settings.liff_id, line_group_id)
 
-    # 使用簡短文字訊息，減少打擾感
-    await _reply_text(
-        reply_token,
-        f"💡 尚未註冊？點這裡開始 → {liff_url}"
+    flex_message = build_liff_entry_flex(
+        title="🔥 還沒登記？",
+        subtitle="點擊下方，報名參戰！",
+        button_label="我要參戰",
+        liff_url=liff_url,
+        alt_text="🔥 還沒登記？點擊報名參戰",
     )
+
+    if not flex_message:
+        await _reply_text(reply_token, f"🔥 還沒登記？點擊報名參戰 → {liff_url}")
+        return
+
+    await _send_flex_message(reply_token, flex_message)
+
+
+async def _send_flex_message(reply_token: str, flex_message) -> None:
+    """發送 Flex Message"""
+    if not flex_message:
+        return
+
+    line_bot = get_line_bot_api()
+    if not line_bot:
+        logger.warning("LINE Bot API not available")
+        return
+
+    try:
+        from linebot.v3.messaging import ReplyMessageRequest
+
+        line_bot.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[flex_message],
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to send flex message: {e}")
 
 
 async def _reply_text(reply_token: str, text: str) -> None:

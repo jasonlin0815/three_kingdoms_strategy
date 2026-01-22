@@ -12,7 +12,7 @@ Data access layer for LINE Bot integration tables:
 - No business logic (belongs in Service layer)
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from src.models.line_binding import (
@@ -557,21 +557,33 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         )
 
     # =========================================================================
-    # User Notification Operations (每用戶每群組只通知一次)
+    # User Notification Operations
     # =========================================================================
 
-    async def has_user_been_notified(
+    async def has_user_been_notified_since(
         self,
         line_group_id: str,
-        line_user_id: str
+        line_user_id: str,
+        since: datetime
     ) -> bool:
-        """Check if user has already been notified in this group"""
+        """
+        Check if user has been notified since the given timestamp
+
+        Args:
+            line_group_id: LINE group ID
+            line_user_id: LINE user ID
+            since: Check for notifications after this time
+
+        Returns:
+            True if user was notified after the given time
+        """
         result = await self._execute_async(
             lambda: self.client
             .from_("line_user_notifications")
-            .select("line_user_id")
+            .select("sent_at")
             .eq("line_group_id", line_group_id)
             .eq("line_user_id", line_user_id)
+            .gte("sent_at", since.isoformat())
             .execute()
         )
 
@@ -583,14 +595,22 @@ class LineBindingRepository(SupabaseRepository[LineBindingCode]):
         line_group_id: str,
         line_user_id: str
     ) -> None:
-        """Record that user has been notified in this group"""
+        """
+        Record that user has been notified in this group
+
+        Uses upsert to update sent_at timestamp if record exists
+        """
         await self._execute_async(
             lambda: self.client
             .from_("line_user_notifications")
-            .upsert({
-                "line_group_id": line_group_id,
-                "line_user_id": line_user_id
-            })
+            .upsert(
+                {
+                    "line_group_id": line_group_id,
+                    "line_user_id": line_user_id,
+                    "sent_at": datetime.now(UTC).isoformat()
+                },
+                on_conflict="line_group_id,line_user_id"
+            )
             .execute()
         )
 

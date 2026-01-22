@@ -390,3 +390,93 @@ def _build_ranking_row(member):
         ],
         margin="sm",
     )
+
+
+# =============================================================================
+# LIFF Entry Flex Message Builder (熱血戰場風)
+# =============================================================================
+
+
+def build_liff_entry_flex(
+    title: str,
+    subtitle: str,
+    button_label: str,
+    liff_url: str,
+    alt_text: str,
+    *,
+    title_color: str = "#1a1a1a",
+    button_color: str | None = None,
+    show_separator: bool = False,
+):
+    """
+    Build a unified LIFF entry Flex Message.
+
+    Args:
+        title: Main title text (e.g., "🏰 同盟連結成功！")
+        subtitle: Description text (e.g., "各位盟友，點擊登記名號！")
+        button_label: Button text (e.g., "立即登記")
+        liff_url: LIFF URL for the button action
+        alt_text: Alternative text for non-Flex clients
+        title_color: Title text color (default: #1a1a1a)
+        button_color: Button background color (default: LINE default)
+        show_separator: Whether to show separator between title and subtitle
+
+    Returns:
+        FlexMessage object ready to send, or None if SDK not available
+    """
+    try:
+        from linebot.v3.messaging import (
+            FlexBox,
+            FlexBubble,
+            FlexButton,
+            FlexMessage,
+            FlexSeparator,
+            FlexText,
+            URIAction,
+        )
+    except ImportError:
+        logger.error("linebot SDK not installed")
+        return None
+
+    # Build body contents
+    body_contents = [
+        FlexText(
+            text=title,
+            weight="bold",
+            size="lg" if not show_separator else "xl",
+            color=title_color,
+        ),
+    ]
+
+    if show_separator:
+        body_contents.append(FlexSeparator(margin="lg"))
+
+    body_contents.append(
+        FlexText(
+            text=subtitle,
+            size="sm" if not show_separator else "md",
+            color="#666666" if not show_separator else "#1a1a1a",
+            margin="lg" if show_separator else "md",
+        )
+    )
+
+    # Build button with optional color
+    button_kwargs = {
+        "action": URIAction(label=button_label, uri=liff_url),
+        "style": "primary",
+    }
+    if button_color:
+        button_kwargs["color"] = button_color
+
+    bubble = FlexBubble(
+        body=FlexBox(
+            layout="vertical",
+            contents=body_contents,
+        ),
+        footer=FlexBox(
+            layout="vertical",
+            contents=[FlexButton(**button_kwargs)],
+        ),
+    )
+
+    return FlexMessage(alt_text=alt_text, contents=bubble)
