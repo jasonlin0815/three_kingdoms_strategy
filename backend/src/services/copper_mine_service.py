@@ -141,9 +141,11 @@ class CopperMineService:
         alliance_id = await self._get_alliance_id_from_group(line_group_id)
 
         # 獲取當前活動賽季
+        # 如果沒有活躍賽季，active_season_id 為 None，會顯示所有銅礦（跨賽季歷史資料）
         active_season_id = await self._get_active_season(alliance_id)
 
         # 只顯示當前賽季的銅礦（公開資訊）
+        # 當 active_season_id 為 None 時，repository 會返回所有銅礦
         mines = await self.repository.get_mines_by_alliance(
             alliance_id,
             season_id=active_season_id

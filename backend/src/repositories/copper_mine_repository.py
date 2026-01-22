@@ -33,7 +33,18 @@ class CopperMineRepository(SupabaseRepository[CopperMine]):
         status: str | None = None,
         season_id: UUID | None = None
     ) -> list[CopperMine]:
-        """Get all copper mines for an alliance, optionally filtered by season"""
+        """
+        Get copper mines for an alliance, optionally filtered by status and season.
+
+        Args:
+            alliance_id: Alliance UUID
+            status: Optional status filter (e.g., 'active', 'inactive')
+            season_id: Optional season UUID. If provided, only returns mines
+                       registered in that season.
+
+        Returns:
+            List of CopperMine entities, ordered by registered_at descending
+        """
         query = (
             self.client
             .from_("copper_mines")

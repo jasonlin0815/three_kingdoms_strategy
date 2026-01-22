@@ -78,18 +78,25 @@ class AnalyticsService:
         self, alliance_id: UUID, active_only: bool = True, season_id: UUID | None = None
     ) -> list[dict]:
         """
-        Get members for analytics member selector with latest rank and group.
+        Get members for analytics selector, filtered by season data availability.
 
-        If season_id is provided, only returns members with data in that season.
-        If season_id is not provided, returns all members.
+        When season_id is provided (required at API layer), only returns members
+        who have period metrics in that season. This ensures:
+        - All returned members have valid data for analytics charts
+        - Copper mine assignment only shows eligible members (rule validation requires snapshots)
+        - UX improvement: users won't select members with no displayable data
+
+        When season_id is None (defensive fallback, not expected from API):
+        Returns all members with contribution_rank and group as None.
 
         Args:
             alliance_id: Alliance UUID
-            active_only: Only return active members
-            season_id: Optional Season UUID to filter members with data in that season
+            active_only: Only return active members (default: True)
+            season_id: Season UUID to filter members. Required at API layer (/analytics/members).
+                       Members without period metrics in this season are excluded.
 
         Returns:
-            List of member dicts with id, name, contribution_rank, and group
+            List of member dicts with id, name, is_active, contribution_rank, and group
         """
         # Build member_id -> metrics map from latest period
         member_metrics_map: dict[UUID, dict] = {}
