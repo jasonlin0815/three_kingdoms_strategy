@@ -5,9 +5,13 @@ Alliance Pydantic models
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# Subscription status type
+SubscriptionStatus = Literal["trial", "active", "expired", "cancelled"]
 
 
 class AllianceBase(BaseModel):
@@ -46,3 +50,24 @@ class Alliance(AllianceBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+
+    # Subscription fields
+    subscription_status: SubscriptionStatus = "trial"
+    trial_started_at: datetime | None = None
+    trial_ends_at: datetime | None = None
+    subscription_plan: str | None = None
+    subscription_started_at: datetime | None = None
+    subscription_ends_at: datetime | None = None
+
+
+class SubscriptionStatusResponse(BaseModel):
+    """Response model for subscription status API"""
+
+    status: SubscriptionStatus
+    is_active: bool = Field(description="Whether subscription is active (trial or paid)")
+    is_trial: bool = Field(description="Whether currently in trial period")
+    is_trial_active: bool = Field(description="Whether trial is still valid")
+    days_remaining: int | None = Field(description="Days remaining in trial/subscription")
+    trial_ends_at: str | None = Field(description="Trial end date (ISO format)")
+    subscription_plan: str | None = Field(description="Current subscription plan name")
+    subscription_ends_at: str | None = Field(description="Subscription end date (ISO format)")

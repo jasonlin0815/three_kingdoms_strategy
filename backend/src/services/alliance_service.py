@@ -89,7 +89,7 @@ class AllianceService:
         """
         Update user's alliance.
 
-        Permission: owner + collaborator
+        Permission: owner + collaborator + active subscription
 
         Args:
             user_id: User UUID from authentication
@@ -100,7 +100,8 @@ class AllianceService:
 
         Raises:
             ValueError: If user has no alliance
-            HTTPException 403: If user doesn't have permission
+            PermissionError: If user doesn't have permission
+            SubscriptionExpiredError: If trial/subscription has expired
 
         Note:
             Changed from get_by_user_id() to get_by_collaborator()
@@ -110,8 +111,8 @@ class AllianceService:
         if not alliance:
             raise ValueError("User has no alliance to update")
 
-        # Verify permission: owner or collaborator can update alliance
-        await self._permission_service.require_owner_or_collaborator(
+        # Verify write permission: role + subscription check
+        await self._permission_service.require_write_permission(
             user_id, alliance.id, "update alliance settings"
         )
 

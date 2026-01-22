@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from '../theme-toggle'
+import { TrialBanner } from '../subscription/TrialBanner'
 import { cn } from '@/lib/utils'
 
 interface DashboardLayoutProps {
@@ -64,6 +65,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <ThemeToggle />
           </div>
         </header>
+
+        {/* Trial/Subscription warning banner */}
+        <TrialBanner />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

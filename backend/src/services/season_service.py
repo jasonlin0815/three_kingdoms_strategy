@@ -153,8 +153,8 @@ class SeasonService:
         if season_data.alliance_id != alliance.id:
             raise PermissionError("Cannot create season for different alliance")
 
-        # Verify permission: owner or collaborator can create seasons
-        await self._permission_service.require_owner_or_collaborator(
+        # Verify write permission (role + subscription check)
+        await self._permission_service.require_write_permission(
             user_id, alliance.id, "create seasons"
         )
 
@@ -194,8 +194,8 @@ class SeasonService:
         # Verify ownership through get_season
         season = await self.get_season(user_id, season_id)
 
-        # Verify permission: owner or collaborator can update seasons
-        await self._permission_service.require_owner_or_collaborator(
+        # Verify write permission (role + subscription check)
+        await self._permission_service.require_write_permission(
             user_id, season.alliance_id, "update seasons"
         )
 
@@ -231,8 +231,8 @@ class SeasonService:
         # Verify ownership through get_season
         season = await self.get_season(user_id, season_id)
 
-        # Verify permission: owner or collaborator can delete seasons
-        await self._permission_service.require_owner_or_collaborator(
+        # Verify write permission (role + subscription check)
+        await self._permission_service.require_write_permission(
             user_id, season.alliance_id, "delete seasons"
         )
 
@@ -264,8 +264,8 @@ class SeasonService:
         # Verify user owns the season (raises error if not)
         await self.get_season(user_id, season_id)
 
-        # Verify permission: owner or collaborator can activate seasons
-        await self._permission_service.require_owner_or_collaborator(
+        # Verify write permission (role + subscription check)
+        await self._permission_service.require_write_permission(
             user_id, alliance.id, "activate seasons"
         )
 

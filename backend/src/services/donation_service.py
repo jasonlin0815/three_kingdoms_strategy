@@ -44,20 +44,25 @@ class DonationService:
 
     async def require_alliance_access(self, user_id: UUID, alliance_id: UUID) -> None:
         """
-        Verify user has owner or collaborator access to alliance
+        Verify user has owner or collaborator access to alliance AND active subscription.
 
         Args:
             user_id: User UUID
             alliance_id: Alliance UUID
 
         Raises:
-            HTTPException: If user lacks access
+            PermissionError: If user lacks access
+            SubscriptionExpiredError: If trial/subscription has expired
         """
-        await self._permission_service.require_owner_or_collaborator(user_id, alliance_id)
+        await self._permission_service.require_write_permission(
+            user_id, alliance_id, "manage donation events"
+        )
 
     async def verify_donation_access(self, user_id: UUID, donation_id: UUID) -> Donation:
         """
-        Verify user has access to donation's alliance and return the donation
+        Verify user has access to donation's alliance and return the donation.
+
+        Checks both role (owner/collaborator) AND active subscription.
 
         Args:
             user_id: User UUID
@@ -67,13 +72,15 @@ class DonationService:
             Donation instance if user has access
 
         Raises:
-            HTTPException: If user lacks access or donation not found
+            HTTPException: If donation not found
+            PermissionError: If user lacks access
+            SubscriptionExpiredError: If trial/subscription has expired
         """
         donation = await self._donation_repo.get_by_id(donation_id)
         if not donation:
             raise HTTPException(status_code=404, detail="Donation event not found")
-        await self._permission_service.require_owner_or_collaborator(
-            user_id, donation.alliance_id
+        await self._permission_service.require_write_permission(
+            user_id, donation.alliance_id, "manage donation events"
         )
         return donation
 

@@ -39,6 +39,7 @@ from src.services.line_binding_service import LineBindingService
 from src.services.period_metrics_service import PeriodMetricsService
 from src.services.permission_service import PermissionService
 from src.services.season_service import SeasonService
+from src.services.subscription_service import SubscriptionService
 
 # ============================================================================
 # Provider Functions (called by Type Aliases)
@@ -109,6 +110,11 @@ def get_copper_mine_rule_service() -> CopperMineRuleService:
     return CopperMineRuleService()
 
 
+def get_subscription_service() -> SubscriptionService:
+    """Get subscription service instance"""
+    return SubscriptionService()
+
+
 # ============================================================================
 # Type Aliases for Dependency Injection (2025 Standard)
 # 符合 CLAUDE.md 🟡: Annotated[Type, Depends()] pattern
@@ -145,3 +151,4 @@ CopperMineRuleServiceDep = Annotated[
     CopperMineRuleService,
     Depends(get_copper_mine_rule_service)
 ]
+SubscriptionServiceDep = Annotated[SubscriptionService, Depends(get_subscription_service)]

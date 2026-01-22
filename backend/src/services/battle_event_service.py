@@ -85,8 +85,16 @@ class BattleEventService:
         Returns:
             Created battle event
 
+        Raises:
+            SubscriptionExpiredError: If trial/subscription has expired
+
         符合 CLAUDE.md 🔴: Service layer orchestration
         """
+        # Verify subscription: trial or paid subscription required
+        await self._permission_service.require_active_subscription(
+            event_data.alliance_id, "create battle events"
+        )
+
         return await self._event_repo.create(event_data)
 
     async def get_event(self, event_id: UUID) -> BattleEvent | None:
@@ -175,6 +183,11 @@ class BattleEventService:
         event = await self._event_repo.get_by_id(event_id)
         if not event:
             raise ValueError(f"Event {event_id} not found")
+
+        # Verify subscription: trial or paid subscription required
+        await self._permission_service.require_active_subscription(
+            event.alliance_id, "process battle event snapshots"
+        )
 
         await self._event_repo.update_upload_ids(
             event_id, before_upload_id, after_upload_id
@@ -400,7 +413,21 @@ class BattleEventService:
 
         Returns:
             True if deleted successfully
+
+        Raises:
+            ValueError: If event not found
+            SubscriptionExpiredError: If trial/subscription has expired
         """
+        # Get event to check alliance_id
+        event = await self._event_repo.get_by_id(event_id)
+        if not event:
+            raise ValueError("Event not found")
+
+        # Verify subscription: trial or paid subscription required
+        await self._permission_service.require_active_subscription(
+            event.alliance_id, "delete battle events"
+        )
+
         # Metrics are deleted via CASCADE
         return await self._event_repo.delete(event_id)
 

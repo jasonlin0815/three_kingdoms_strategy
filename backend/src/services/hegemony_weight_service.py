@@ -30,6 +30,7 @@ from src.repositories.csv_upload_repository import CsvUploadRepository
 from src.repositories.hegemony_weight_repository import HegemonyWeightRepository
 from src.repositories.member_snapshot_repository import MemberSnapshotRepository
 from src.repositories.season_repository import SeasonRepository
+from src.services.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class HegemonyWeightService:
         self._upload_repo = CsvUploadRepository()
         self._snapshot_repo = MemberSnapshotRepository()
         self._collaborator_repo = AllianceCollaboratorRepository()
+        self._permission_service = PermissionService()
 
     async def _verify_season_access(
         self, user_id: UUID, season_id: UUID, required_roles: list[str]
@@ -179,6 +181,11 @@ class HegemonyWeightService:
                 user_id, season_id, ['owner', 'collaborator']
             )
 
+            # Verify subscription: trial or paid subscription required
+            await self._permission_service.require_active_subscription(
+                alliance.id, "initialize hegemony weights"
+            )
+
             uploads = await self._upload_repo.get_by_season(season_id)
             if not uploads:
                 return []
@@ -235,6 +242,11 @@ class HegemonyWeightService:
         """
         _, alliance = await self._verify_season_access(user_id, season_id, ['owner', 'collaborator'])
 
+        # Verify subscription: trial or paid subscription required
+        await self._permission_service.require_active_subscription(
+            alliance.id, "create hegemony weights"
+        )
+
         # Verify CSV upload exists and belongs to this season
         upload = await self._upload_repo.get_by_id(data.csv_upload_id)
         if not upload or upload.season_id != season_id:
@@ -253,7 +265,7 @@ class HegemonyWeightService:
 
     async def _verify_weight_access(
         self, user_id: UUID, weight_id: UUID, action: str
-    ) -> HegemonyWeight:
+    ) -> tuple[HegemonyWeight, UUID]:
         """
         Verify user has access to modify a weight.
 
@@ -265,7 +277,7 @@ class HegemonyWeightService:
             action: Description of the action (for error messages)
 
         Returns:
-            HegemonyWeight object
+            Tuple of (HegemonyWeight object, alliance_id)
 
         Raises:
             ValueError: If weight not found
@@ -297,7 +309,7 @@ class HegemonyWeightService:
                        f"Required role: owner or collaborator, your role: {role or 'none'}"
             )
 
-        return weight
+        return weight, alliance.id
 
     async def update_weight(
         self, user_id: UUID, weight_id: UUID, data: HegemonyWeightUpdate
@@ -318,7 +330,14 @@ class HegemonyWeightService:
         Raises:
             HTTPException 403: If user doesn't have permission
         """
-        await self._verify_weight_access(user_id, weight_id, "update hegemony weights")
+        _, alliance_id = await self._verify_weight_access(
+            user_id, weight_id, "update hegemony weights"
+        )
+
+        # Verify subscription: trial or paid subscription required
+        await self._permission_service.require_active_subscription(
+            alliance_id, "update hegemony weights"
+        )
 
         return await self._weight_repo.update_weights(
             weight_id=weight_id,
@@ -345,7 +364,14 @@ class HegemonyWeightService:
         Raises:
             HTTPException 403: If user doesn't have permission
         """
-        await self._verify_weight_access(user_id, weight_id, "delete hegemony weights")
+        _, alliance_id = await self._verify_weight_access(
+            user_id, weight_id, "delete hegemony weights"
+        )
+
+        # Verify subscription: trial or paid subscription required
+        await self._permission_service.require_active_subscription(
+            alliance_id, "delete hegemony weights"
+        )
 
         return await self._weight_repo.delete(weight_id)
 

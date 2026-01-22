@@ -6,29 +6,64 @@ Permission Service
 - 🔴 NO direct database calls (use Repository)
 - 🟡 Exception chaining with 'from e'
 - 🟡 Use native exceptions, not HTTPException
+
+This service is the SINGLE ENTRY POINT for all permission checks:
+- Role-based access control (owner, collaborator, member)
+- Subscription-based write access control
+
+Usage:
+    # For write operations (role + subscription check)
+    await permission_service.require_write_permission(user_id, alliance_id, "upload CSV")
+
+    # For owner-only operations (no subscription check needed)
+    await permission_service.require_owner(user_id, alliance_id, "delete alliance")
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from src.repositories.alliance_collaborator_repository import (
     AllianceCollaboratorRepository,
 )
 
+if TYPE_CHECKING:
+    from src.services.subscription_service import SubscriptionService
+
 logger = logging.getLogger(__name__)
 
 
 class PermissionService:
     """
-    Permission service for role-based access control
+    Permission service for role-based and subscription-based access control.
 
-    Provides centralized permission checking across the application.
-    All permission checks should go through this service for consistency.
+    This is the SINGLE ENTRY POINT for all permission checks in the application.
+    Other services should only depend on PermissionService, not SubscriptionService directly.
+
+    Permission Matrix:
+    - View data: any member (no subscription required)
+    - Write operations: owner/collaborator + active subscription
+    - Owner-only operations: owner only (no subscription required)
     """
 
-    def __init__(self):
-        """Initialize permission service with repository"""
+    def __init__(self, subscription_service: SubscriptionService | None = None):
+        """
+        Initialize permission service.
+
+        Args:
+            subscription_service: Optional SubscriptionService instance.
+                                  If not provided, one will be created automatically.
+        """
         self._collaborator_repo = AllianceCollaboratorRepository()
+
+        # Lazy import to avoid circular dependency
+        if subscription_service is None:
+            from src.services.subscription_service import SubscriptionService
+            self._subscription_service: SubscriptionService = SubscriptionService()
+        else:
+            self._subscription_service = subscription_service
 
     async def get_user_role(self, user_id: UUID, alliance_id: UUID) -> str | None:
         """
@@ -199,3 +234,61 @@ class PermissionService:
             alliance_id,
             ['owner', 'collaborator', 'member']
         )
+
+    async def require_write_permission(
+        self,
+        user_id: UUID,
+        alliance_id: UUID,
+        action: str = "perform this action"
+    ) -> None:
+        """
+        Require user to have write permission (role + active subscription).
+
+        This is the PRIMARY METHOD for checking write access. It combines:
+        1. Role check: User must be owner or collaborator
+        2. Subscription check: Alliance must have active trial or subscription
+
+        All write operations should use this method for consistent permission enforcement.
+
+        Args:
+            user_id: User UUID
+            alliance_id: Alliance UUID
+            action: Description of the action being attempted (for error messages)
+
+        Raises:
+            ValueError: If user is not a member of the alliance
+            PermissionError: If user doesn't have required role (owner/collaborator)
+            SubscriptionExpiredError: If trial/subscription has expired
+
+        Example:
+            >>> await permission_service.require_write_permission(
+            ...     user_id,
+            ...     alliance_id,
+            ...     "upload CSV data"
+            ... )
+        """
+        # Step 1: Check role (must be owner or collaborator)
+        await self.require_owner_or_collaborator(user_id, alliance_id, action)
+
+        # Step 2: Check subscription (must be active)
+        await self._subscription_service.require_write_access(alliance_id, action)
+
+    async def require_active_subscription(
+        self,
+        alliance_id: UUID,
+        action: str = "perform this action"
+    ) -> None:
+        """
+        Require alliance to have active subscription (subscription check only).
+
+        Use this method when role has already been verified separately.
+        For most cases, prefer require_write_permission() which combines both checks.
+
+        Args:
+            alliance_id: Alliance UUID
+            action: Description of the action being attempted
+
+        Raises:
+            SubscriptionExpiredError: If trial/subscription has expired
+        """
+        await self._subscription_service.require_write_access(alliance_id, action)

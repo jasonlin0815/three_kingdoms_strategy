@@ -22,9 +22,11 @@ from src.api.v1.endpoints import (
     linebot,
     periods,
     seasons,
+    subscriptions,
     uploads,
 )
 from src.core.config import settings
+from src.core.exceptions import SubscriptionExpiredError
 
 # Create FastAPI app
 # 符合 CLAUDE.md 🔴: redirect_slashes=False for cloud deployment
@@ -59,6 +61,7 @@ app.include_router(events.router, prefix="/api/v1")
 app.include_router(donations.router, prefix="/api/v1")
 app.include_router(copper_mines.router, prefix="/api/v1")
 app.include_router(linebot.router, prefix="/api/v1")
+app.include_router(subscriptions.router, prefix="/api/v1")
 
 
 # Global Exception Handlers
@@ -100,6 +103,22 @@ async def permission_error_handler(request: Request, exc: PermissionError) -> JS
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={"detail": str(exc)}
+    )
+
+
+@app.exception_handler(SubscriptionExpiredError)
+async def subscription_expired_handler(
+    request: Request, exc: SubscriptionExpiredError
+) -> JSONResponse:
+    """
+    Handle SubscriptionExpiredError exceptions globally
+
+    Converts SubscriptionExpiredError to HTTP 402 Payment Required
+    This indicates the user needs to upgrade their subscription to continue.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        content={"detail": exc.message, "error_code": exc.error_code}
     )
 
 
